@@ -5,6 +5,10 @@ from database import engine, SessionLocal, Base
 
 app = FastAPI(title="User Profile API")
 
+@app.get("/", tags=["root"])
+async def root():
+    return {"message": "Welcome to the User Profile API. Visit /docs for API documentation."}
+
 # CORS middleware (allow all origins for now)
 app.add_middleware(
     CORSMiddleware,
