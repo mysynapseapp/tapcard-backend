@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
+from datetime import datetime
 
 import models, schemas
 from database import get_db
@@ -20,18 +21,19 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        username: str = payload.get("sub")
+        if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = db.query(models.User).filter(models.User.email == email).first()
+    user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
         raise credentials_exception
     return user
 
 @router.get("/profile", response_model=schemas.UserOut)
 def read_profile(current_user: models.User = Depends(get_current_user)):
+    # Include social links in the response
     return current_user
 
 @router.put("/profile", response_model=schemas.UserOut)

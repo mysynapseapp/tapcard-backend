@@ -10,13 +10,9 @@ def generate_uuid():
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    full_name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    phone_number = Column(String, nullable=True)
-    profile_image_url = Column(String, nullable=True)
-    job_title = Column(String, nullable=True)
+    username = Column(String, unique=True, nullable=False, index=True)
     bio = Column(Text, nullable=True)
+    dob = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

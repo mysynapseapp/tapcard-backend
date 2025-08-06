@@ -4,25 +4,26 @@ from pydantic import BaseModel, EmailStr, HttpUrl
 
 # User schemas
 class UserBase(BaseModel):
-    full_name: str
-    email: EmailStr
-    phone_number: Optional[str] = None
-    profile_image_url: Optional[str] = None
-    job_title: Optional[str] = None
+    username: str
     bio: Optional[str] = None
+    dob: Optional[date] = None
 
-class UserCreate(UserBase):
-    password: str
+class UserCreate(BaseModel):
+    username: str
+    bio: Optional[str] = None
+    dob: Optional[date] = None
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    profile_image_url: Optional[str] = None
-    job_title: Optional[str] = None
+    username: Optional[str] = None
     bio: Optional[str] = None
+    dob: Optional[date] = None
 
-class UserOut(UserBase):
+class UserOut(BaseModel):
     id: str
+    username: str
+    bio: Optional[str] = None
+    dob: Optional[date] = None
+    social_links: List['SocialLinkOut'] = []
     created_at: datetime
     updated_at: datetime
 
