@@ -44,14 +44,23 @@ def authenticate_user(db: Session, email: str, password: str):
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = get_user_by_email(db, user.email)
+    # Check if email already exists
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if username already exists
+    db_user = db.query(models.User).filter(models.User.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
     hashed_password = get_password_hash(user.password)
     new_user = models.User(
-        full_name=user.name,
+        username=user.username,
         email=user.email,
         password_hash=hashed_password,
+        bio=user.bio,
+        dob=user.dob,
     )
     db.add(new_user)
     db.commit()

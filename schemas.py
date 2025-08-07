@@ -10,6 +10,8 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
+    email: EmailStr
+    password: str
     bio: Optional[str] = None
     dob: Optional[date] = None
 
