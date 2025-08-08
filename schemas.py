@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel, EmailStr, HttpUrl, ConfigDict
 
 # User schemas
 class UserBase(BaseModel):
@@ -29,8 +29,7 @@ class UserOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Auth schemas
 class Token(BaseModel):
@@ -59,8 +58,7 @@ class SocialLinkUpdate(BaseModel):
 class SocialLinkOut(SocialLinkBase):
     id: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Portfolio Item schemas
 class PortfolioItemBase(BaseModel):
@@ -79,8 +77,7 @@ class PortfolioItemUpdate(BaseModel):
 class PortfolioItemOut(PortfolioItemBase):
     id: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Work Experience schemas
 class WorkExperienceBase(BaseModel):
@@ -103,8 +100,7 @@ class WorkExperienceUpdate(BaseModel):
 class WorkExperienceOut(WorkExperienceBase):
     id: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # QR Code schemas
 class QRCodeOut(BaseModel):
@@ -112,8 +108,7 @@ class QRCodeOut(BaseModel):
     qr_code_url: str
     last_generated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Analytics schemas
 class AnalyticsOut(BaseModel):
@@ -122,5 +117,4 @@ class AnalyticsOut(BaseModel):
     event_data: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

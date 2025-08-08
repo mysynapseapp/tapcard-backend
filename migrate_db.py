@@ -1,24 +1,46 @@
 #!/usr/bin/env python3
 """
-Database migration script to update User model schema
-This script safely migrates your existing database to the new schema
+Database migration script for Neon DB (PostgreSQL)
+This script safely migrates your existing database to the new schema using SQLAlchemy
 """
 
-import sqlite3
+import os
 import uuid
 from datetime import datetime
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from dotenv import load_dotenv
+
+# Import your models
+from models import User, Base
+from database import DATABASE_URL
+
+load_dotenv()
+
+def generate_uuid():
+    return str(uuid.uuid4())
 
 def migrate_database():
-    """Migrate the database to match the new User model"""
+    """Migrate the database to match the new User model using SQLAlchemy"""
     
-    # Connect to the database
-    conn = sqlite3.connect('app.db')
-    cursor = conn.cursor()
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+    session = Session()
     
     try:
-        # Check current schema
-        cursor.execute("PRAGMA table_info(users)")
-        current_columns = [row[1] for row in cursor.fetchall()]
+        # Create inspector to check current schema
+        inspector = inspect(engine)
+        
+        # Check if users table exists
+        if 'users' not in inspector.get_table_names():
+            print("Users table does not exist. Creating new table...")
+            Base.metadata.create_all(engine)
+            print("Database schema created successfully!")
+            return
+        
+        # Get current table info
+        current_columns = [col['name'] for col in inspector.get_columns('users')]
         print(f"Current columns: {current_columns}")
         
         # Check if migration is needed
@@ -31,76 +53,167 @@ def migrate_database():
         
         print(f"Missing columns: {missing_columns}")
         
-        # Create new table with correct schema
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users_new (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                bio TEXT,
-                dob DATE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Check if old users table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        if cursor.fetchone():
-            # Get data from old table
-            cursor.execute('SELECT * FROM users')
-            old_data = cursor.fetchall()
+        # Start transaction
+        with engine.begin() as connection:
+            # Create new table with updated schema
+            new_table_name = 'users_new'
             
-            if old_data:
-                print(f"Found {len(old_data)} existing users to migrate")
+            # Drop new table if it exists from previous failed migration
+            connection.execute(text(f"DROP TABLE IF EXISTS {new_table_name}"))
+            
+            # Create new table with correct schema
+            create_table_sql = """
+                CREATE TABLE IF NOT EXISTS users_new (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    bio TEXT,
+                    dob DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            connection.execute(text(create_table_sql))
+            
+            # Check if old users table exists and has data
+            result = connection.execute(text("SELECT COUNT(*) FROM users"))
+            user_count = result.scalar()
+            
+            if user_count > 0:
+                print(f"Found {user_count} existing users to migrate")
                 
-                # Get column names from old table
-                cursor.execute('PRAGMA table_info(users)')
-                old_columns = [row[1] for row in cursor.fetchall()]
+                # Get data from old table
+                result = connection.execute(text("SELECT * FROM users"))
+                old_users = result.fetchall()
                 
                 # Migrate each user
-                for row in old_data:
-                    user_dict = dict(zip(old_columns, row))
+                for user in old_users:
+                    user_dict = dict(user._mapping)
                     
                     # Generate new user data
-                    new_id = user_dict.get('id', str(uuid.uuid4()))
-                    username = user_dict.get('username', f"user_{new_id[:8]}")
-                    email = f"{username}@example.com"  # Placeholder email
-                    password_hash = "placeholder_hash"  # Placeholder password
-                    bio = user_dict.get('bio', None)
-                    dob = user_dict.get('dob', None)
+                    new_id = user_dict.get('id', generate_uuid())
+                    username = user_dict.get('username', f"user_{str(new_id)[:8]}")
+                    email = user_dict.get('email', f"{username}@example.com")
+                    password_hash = user_dict.get('password_hash', 'placeholder_hash')
+                    bio = user_dict.get('bio')
+                    dob = user_dict.get('dob')
                     created_at = user_dict.get('created_at', datetime.utcnow())
                     updated_at = user_dict.get('updated_at', datetime.utcnow())
                     
-                    cursor.execute('''
+                    # Insert into new table
+                    insert_sql = """
                         INSERT INTO users_new (id, username, email, password_hash, bio, dob, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (new_id, username, email, password_hash, bio, dob, created_at, updated_at))
+                        VALUES (:id, :username, :email, :password_hash, :bio, :dob, :created_at, :updated_at)
+                    """
+                    connection.execute(text(insert_sql), {
+                        'id': new_id,
+                        'username': username,
+                        'email': email,
+                        'password_hash': password_hash,
+                        'bio': bio,
+                        'dob': dob,
+                        'created_at': created_at,
+                        'updated_at': updated_at
+                    })
                 
                 print("Data migration completed")
-        
-        # Rename old table as backup
-        cursor.execute('ALTER TABLE users RENAME TO users_backup')
-        
-        # Rename new table to users
-        cursor.execute('ALTER TABLE users_new RENAME TO users')
-        
-        # Commit changes
-        conn.commit()
-        print("Database migration completed successfully!")
-        
-        # Verify new schema
-        cursor.execute("PRAGMA table_info(users)")
-        new_columns = [row[1] for row in cursor.fetchall()]
-        print(f"New columns: {new_columns}")
-        
-    except Exception as e:
+            
+            # Rename old table as backup
+            connection.execute(text("ALTER TABLE users RENAME TO users_backup"))
+            
+            # Rename new table to users
+            connection.execute(text(f"ALTER TABLE {new_table_name} RENAME TO users"))
+            
+            # Create indexes for better performance
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"))
+            
+            print("Database migration completed successfully!")
+            
+            # Verify new schema
+            inspector = inspect(engine)
+            new_columns = [col['name'] for col in inspector.get_columns('users')]
+            print(f"New columns: {new_columns}")
+            
+    except SQLAlchemyError as e:
         print(f"Error during migration: {e}")
-        conn.rollback()
+        session.rollback()
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        session.rollback()
         raise
     finally:
-        conn.close()
+        session.close()
+
+def check_database_schema():
+    """Check current database schema without making changes"""
+    
+    engine = create_engine(DATABASE_URL)
+    inspector = inspect(engine)
+    
+    print("=== Database Schema Check ===")
+    
+    # List all tables
+    tables = inspector.get_table_names()
+    print(f"Tables: {tables}")
+    
+    if 'users' in tables:
+        # Get users table info
+        columns = inspector.get_columns('users')
+        print("\nUsers table columns:")
+        for col in columns:
+            print(f"  - {col['name']}: {col['type']}")
+        
+        # Get indexes
+        indexes = inspector.get_indexes('users')
+        if indexes:
+            print("\nUsers table indexes:")
+            for idx in indexes:
+                print(f"  - {idx['name']}: {idx['column_names']}")
+    
+    engine.dispose()
+
+def reset_database():
+    """Reset database - WARNING: This will delete all data!"""
+    
+    confirm = input("Are you sure you want to reset the database? This will delete ALL data! (yes/no): ")
+    if confirm.lower() != 'yes':
+        print("Database reset cancelled")
+        return
+    
+    engine = create_engine(DATABASE_URL)
+    
+    try:
+        with engine.begin() as connection:
+            # Drop existing tables
+            connection.execute(text("DROP TABLE IF EXISTS users CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS social_links CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS portfolio_items CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS work_experience CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS qr_codes CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS analytics CASCADE"))
+            
+            # Create all tables with current schema
+            Base.metadata.create_all(engine)
+            print("Database reset completed successfully!")
+            
+    except Exception as e:
+        print(f"Error resetting database: {e}")
 
 if __name__ == "__main__":
-    migrate_database()
+    import sys
+    
+    if len(sys.argv) > 1:
+        command = sys.argv[1]
+        if command == 'check':
+            check_database_schema()
+        elif command == 'reset':
+            reset_database()
+        else:
+            print("Usage: python migrate_db.py [check|reset]")
+            print("  check - Check current database schema")
+            print("  reset - Reset database (WARNING: deletes all data)")
+    else:
+        migrate_database()

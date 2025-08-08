@@ -44,28 +44,42 @@ def authenticate_user(db: Session, email: str, password: str):
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Check if email already exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Check if username already exists
-    db_user = db.query(models.User).filter(models.User.username == user.username).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Username already taken")
-    
-    hashed_password = get_password_hash(user.password)
-    new_user = models.User(
-        username=user.username,
-        email=user.email,
-        password_hash=hashed_password,
-        bio=user.bio,
-        dob=user.dob,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
+    try:
+        # Check if email already exists
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if username already exists
+        db_user = db.query(models.User).filter(models.User.username == user.username).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Validate password length
+        if len(user.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        
+        hashed_password = get_password_hash(user.password)
+        new_user = models.User(
+            username=user.username,
+            email=user.email,
+            password_hash=hashed_password,
+            bio=user.bio if user.bio else None,
+            dob=user.dob if user.dob else None,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return new_user
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Log the actual error for debugging
+        print(f"Registration error: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
