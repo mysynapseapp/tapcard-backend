@@ -78,8 +78,7 @@ def get_social_links(db: Session = Depends(get_db), current_user: models.User = 
 def create_social_link(
     social_link: schemas.SocialLinkCreate, 
     db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user),
-    request: Request = Depends()
+    current_user: models.User = Depends(get_current_user)
 ):
     try:
         # Validate URL format
