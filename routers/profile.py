@@ -38,15 +38,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.get("/profile", response_model=schemas.UserOut)
 def read_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Eager load social links to avoid N+1 queries
-    user = db.query(models.User).options(
-        joinedload(models.User.social_links)
-    ).filter(models.User.id == current_user.id).first()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return schemas.UserOut.from_orm(user)
+    try:
+        # Simple query without joinedload to avoid potential issues
+        user = db.query(models.User).filter(models.User.id == current_user.id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Load social links separately if needed
+        social_links = db.query(models.SocialLink).filter(
+            models.SocialLink.user_id == current_user.id
+        ).all()
+        
+        # Create response with social links
+        user_out = schemas.UserOut.from_orm(user)
+        user_out.social_links = [schemas.SocialLinkOut.from_orm(link) for link in social_links]
+        
+        return user_out
+        
+    except Exception as e:
+        print(f"Profile fetch error: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to fetch profile: {str(e)}"
+        )
 
 @router.put("/profile", response_model=schemas.UserOut)
 def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
