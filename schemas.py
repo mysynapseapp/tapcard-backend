@@ -36,6 +36,8 @@ class UserOut(BaseModel):
     @classmethod
     def from_orm(cls, obj):
         """Convert ORM object with UUID fields to string"""
+        from datetime import datetime
+        
         data = {
             'id': str(obj.id),
             'username': obj.username,
@@ -43,8 +45,8 @@ class UserOut(BaseModel):
             'bio': obj.bio,
             'dob': obj.dob,
             'social_links': [],
-            'created_at': obj.created_at,
-            'updated_at': obj.updated_at
+            'created_at': obj.created_at or datetime.utcnow(),
+            'updated_at': obj.updated_at or datetime.utcnow()
         }
         return cls(**data)
 
