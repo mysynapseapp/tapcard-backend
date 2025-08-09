@@ -24,6 +24,7 @@ class UserUpdate(BaseModel):
 class UserOut(BaseModel):
     id: str
     username: str
+    email: str
     bio: Optional[str] = None
     dob: Optional[date] = None
     social_links: List['SocialLinkOut'] = []
@@ -38,6 +39,7 @@ class UserOut(BaseModel):
         data = {
             'id': str(obj.id),
             'username': obj.username,
+            'email': obj.email,
             'bio': obj.bio,
             'dob': obj.dob,
             'social_links': [],
