@@ -32,6 +32,20 @@ class UserOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert ORM object with UUID fields to string"""
+        data = {
+            'id': str(obj.id),
+            'username': obj.username,
+            'bio': obj.bio,
+            'dob': obj.dob,
+            'social_links': [],
+            'created_at': obj.created_at,
+            'updated_at': obj.updated_at
+        }
+        return cls(**data)
+
 # Auth schemas
 class Token(BaseModel):
     access_token: str
@@ -60,6 +74,16 @@ class SocialLinkOut(SocialLinkBase):
     id: str
 
     model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert ORM object with UUID fields to string"""
+        data = {
+            'id': str(obj.id),
+            'platform_name': obj.platform_name,
+            'link_url': obj.link_url
+        }
+        return cls(**data)
 
 # Portfolio Item schemas
 class PortfolioItemBase(BaseModel):

@@ -70,7 +70,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        return new_user
+        return schemas.UserOut.from_orm(new_user)
         
     except HTTPException:
         # Re-raise HTTP exceptions

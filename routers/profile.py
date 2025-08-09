@@ -32,9 +32,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 @router.get("/profile", response_model=schemas.UserOut)
-def read_profile(current_user: models.User = Depends(get_current_user)):
+def read_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Include social links in the response
-    return current_user
+    return schemas.UserOut.from_orm(current_user)
 
 @router.put("/profile", response_model=schemas.UserOut)
 def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
