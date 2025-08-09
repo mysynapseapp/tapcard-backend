@@ -9,7 +9,6 @@ import models, schemas
 from database import get_db
 from routers.auth import oauth2_scheme
 from datetime import datetime
-from fastapi import Request
 
 router = APIRouter()
 
