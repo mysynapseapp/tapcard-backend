@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
 from datetime import datetime
+import uuid
 
 import models, schemas
 from database import get_db
@@ -41,13 +42,27 @@ def read_profile(current_user: models.User = Depends(get_current_user), db: Sess
 
 @router.put("/profile", response_model=schemas.UserOut)
 def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    user = db.query(models.User).filter(models.User.id == current_user.id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    update_data = user_update.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(user, key, value)
-    user.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        user = db.query(models.User).filter(models.User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        update_data = user_update.dict(exclude_unset=True)
+        
+        # Validate username if provided
+        if 'username' in update_data and update_data['username']:
+            if len(update_data['username']) < 3:
+                raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+            if len(update_data['username']) > 50:
+                raise HTTPException(status_code=400, detail="Username must be less than 50 characters")
+        
+        for key, value in update_data.items():
+            setattr(user, key, value)
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return schemas.UserOut.from_orm(user)
+    except Exception as e:
+        db.rollback()
+        print(f"Profile update error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
