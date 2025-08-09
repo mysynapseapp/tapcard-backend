@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
 from datetime import datetime
@@ -37,8 +38,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.get("/profile", response_model=schemas.UserOut)
 def read_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Include social links in the response
-    return schemas.UserOut.from_orm(current_user)
+    # Eager load social links to avoid N+1 queries
+    user = db.query(models.User).options(
+        joinedload(models.User.social_links)
+    ).filter(models.User.id == current_user.id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return schemas.UserOut.from_orm(user)
 
 @router.put("/profile", response_model=schemas.UserOut)
 def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

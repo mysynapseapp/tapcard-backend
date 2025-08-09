@@ -38,13 +38,23 @@ class UserOut(BaseModel):
         """Convert ORM object with UUID fields to string"""
         from datetime import datetime
         
+        # Load social links from the relationship
+        social_links_data = []
+        if hasattr(obj, 'social_links') and obj.social_links:
+            for link in obj.social_links:
+                social_links_data.append({
+                    'id': str(link.id),
+                    'platform_name': link.platform_name,
+                    'link_url': str(link.link_url)
+                })
+        
         data = {
             'id': str(obj.id),
             'username': obj.username,
             'email': obj.email,
             'bio': obj.bio,
             'dob': obj.dob,
-            'social_links': [],
+            'social_links': social_links_data,
             'created_at': obj.created_at or datetime.utcnow(),
             'updated_at': obj.updated_at or datetime.utcnow()
         }
