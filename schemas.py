@@ -42,11 +42,11 @@ class UserOut(BaseModel):
         social_links_data = []
         if hasattr(obj, 'social_links') and obj.social_links:
             for link in obj.social_links:
-                social_links_data.append({
-                    'id': str(link.id),
-                    'platform_name': link.platform_name,
-                    'link_url': str(link.link_url)
-                })
+                social_links_data.append(SocialLinkOut.from_orm(link))
+        
+        # Handle missing created_at/updated_at
+        created_at = obj.created_at if hasattr(obj, 'created_at') and obj.created_at else datetime.utcnow()
+        updated_at = obj.updated_at if hasattr(obj, 'updated_at') and obj.updated_at else datetime.utcnow()
         
         data = {
             'id': str(obj.id),
@@ -55,8 +55,8 @@ class UserOut(BaseModel):
             'bio': obj.bio,
             'dob': obj.dob,
             'social_links': social_links_data,
-            'created_at': obj.created_at or datetime.utcnow(),
-            'updated_at': obj.updated_at or datetime.utcnow()
+            'created_at': created_at,
+            'updated_at': updated_at
         }
         return cls(**data)
 

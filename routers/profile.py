@@ -39,25 +39,19 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @router.get("/profile", response_model=schemas.UserOut)
 def read_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        # Simple query without joinedload to avoid potential issues
+        # Get user with all relationships
         user = db.query(models.User).filter(models.User.id == current_user.id).first()
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Load social links separately if needed
-        social_links = db.query(models.SocialLink).filter(
-            models.SocialLink.user_id == current_user.id
-        ).all()
-        
-        # Create response with social links
-        user_out = schemas.UserOut.from_orm(user)
-        user_out.social_links = [schemas.SocialLinkOut.from_orm(link) for link in social_links]
-        
-        return user_out
+        # Return user data using the schema's from_orm method
+        return schemas.UserOut.from_orm(user)
         
     except Exception as e:
         print(f"Profile fetch error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500, 
             detail=f"Failed to fetch profile: {str(e)}"
@@ -74,10 +68,30 @@ def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db
         
         # Validate username if provided
         if 'username' in update_data and update_data['username']:
-            if len(update_data['username']) < 3:
+            username = update_data['username'].strip()
+            if len(username) < 3:
                 raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-            if len(update_data['username']) > 50:
+            if len(username) > 50:
                 raise HTTPException(status_code=400, detail="Username must be less than 50 characters")
+            
+            # Check if username is already taken by another user
+            existing_user = db.query(models.User).filter(
+                models.User.username == username,
+                models.User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Validate email if provided
+        if 'email' in update_data and update_data['email']:
+            email = update_data['email'].strip()
+            # Check if email is already taken by another user
+            existing_user = db.query(models.User).filter(
+                models.User.email == email,
+                models.User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Email already taken")
         
         for key, value in update_data.items():
             setattr(user, key, value)
@@ -85,7 +99,12 @@ def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db
         db.commit()
         db.refresh(user)
         return schemas.UserOut.from_orm(user)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         print(f"Profile update error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
