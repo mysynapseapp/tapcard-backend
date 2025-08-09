@@ -18,6 +18,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
+    email: Optional[str] = None
     bio: Optional[str] = None
     dob: Optional[date] = None
 
