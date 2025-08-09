@@ -9,6 +9,7 @@ import models, schemas
 from database import get_db
 from routers.auth import oauth2_scheme
 from datetime import datetime
+from fastapi import Request
 
 router = APIRouter()
 
@@ -36,13 +37,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def validate_url_format(url: str, platform: str) -> bool:
     """Validate URL format based on platform"""
     if platform.lower() == 'youtube':
-        # YouTube URL validation
+        # YouTube URL validation - comprehensive patterns
         youtube_patterns = [
-            r'^https?://(?:www\.)?youtube\.com/.*$',
-            r'^https?://(?:www\.)?youtu\.be/.*$',
-            r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+$',
-            r'^https?://(?:www\.)?youtube\.com/channel/[\w-]+$',
-            r'^https?://(?:www\.)?youtube\.com/c/[\w-]+$'
+            # Standard YouTube URLs
+            r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:&[\w-]+=[^&]*)*$',
+            r'^https?://(?:www\.)?youtube\.com/watch\?.*v=[\w-]+(?:&[\w-]+=[^&]*)*$',
+            r'^https?://(?:www\.)?youtube\.com/embed/[\w-]+(?:\?[^&]*)?$',
+            r'^https?://(?:www\.)?youtube\.com/v/[\w-]+(?:\?[^&]*)?$',
+            r'^https?://(?:www\.)?youtube\.com/shorts/[\w-]+(?:\?[^&]*)?$',
+            
+            # Channel URLs
+            r'^https?://(?:www\.)?youtube\.com/channel/[\w-]+(?:/.*)?$',
+            r'^https?://(?:www\.)?youtube\.com/c/[\w-]+(?:/.*)?$',
+            r'^https?://(?:www\.)?youtube\.com/user/[\w-]+(?:/.*)?$',
+            r'^https?://(?:www\.)?youtube\.com/@\w+(?:/.*)?$',
+            
+            # Shortened URLs
+            r'^https?://(?:www\.)?youtu\.be/[\w-]+(?:\?.*)?$',
+            
+            # Playlist URLs
+            r'^https?://(?:www\.)?youtube\.com/playlist\?list=[\w-]+(?:&.*)?$',
+            r'^https?://(?:www\.)?youtube\.com/watch\?.*list=[\w-]+(?:&.*)?$',
+            
+            # Live URLs
+            r'^https?://(?:www\.)?youtube\.com/live/[\w-]+(?:\?.*)?$'
         ]
         return any(re.match(pattern, url, re.IGNORECASE) for pattern in youtube_patterns)
     return True
@@ -57,11 +75,19 @@ def get_social_links(db: Session = Depends(get_db), current_user: models.User = 
         raise HTTPException(status_code=500, detail="Failed to fetch social links")
 
 @router.post("/", response_model=schemas.SocialLinkOut, status_code=status.HTTP_201_CREATED)
-def create_social_link(social_link: schemas.SocialLinkCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def create_social_link(
+    social_link: schemas.SocialLinkCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user),
+    request: Request = Depends()
+):
     try:
         # Validate URL format
         if not validate_url_format(str(social_link.link_url), social_link.platform_name):
-            raise HTTPException(status_code=400, detail="Invalid URL format for the specified platform")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid URL format for {social_link.platform_name}. Please provide a valid URL for this platform."
+            )
         
         new_link = models.SocialLink(
             user_id=current_user.id,
@@ -72,6 +98,8 @@ def create_social_link(social_link: schemas.SocialLinkCreate, db: Session = Depe
         db.commit()
         db.refresh(new_link)
         return schemas.SocialLinkOut.from_orm(new_link)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print(f"Error creating social link: {str(e)}")
