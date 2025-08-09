@@ -33,8 +33,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.get("/", response_model=List[schemas.WorkExperienceOut])
 def get_work_experiences(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    experiences = db.query(models.WorkExperience).filter(models.WorkExperience.user_id == current_user.id).all()
-    return experiences
+    try:
+        experiences = db.query(models.WorkExperience).filter(models.WorkExperience.user_id == current_user.id).all()
+        return experiences
+    except Exception as e:
+        print(f"Work experience fetch error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch work experiences: {str(e)}")
 
 @router.post("/", response_model=schemas.WorkExperienceOut, status_code=status.HTTP_201_CREATED)
 def create_work_experience(experience: schemas.WorkExperienceCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

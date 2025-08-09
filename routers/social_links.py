@@ -126,12 +126,19 @@ def update_social_link(link_id: str, social_link_update: schemas.SocialLinkUpdat
         if 'link_url' in update_data and 'platform_name' in update_data:
             if not validate_url_format(str(update_data['link_url']), update_data['platform_name']):
                 raise HTTPException(status_code=400, detail="Invalid URL format for the specified platform")
+            # Convert HttpUrl to string
+            update_data['link_url'] = str(update_data['link_url'])
         elif 'link_url' in update_data:
             if not validate_url_format(str(update_data['link_url']), link.platform_name):
                 raise HTTPException(status_code=400, detail="Invalid URL format for the specified platform")
+            # Convert HttpUrl to string
+            update_data['link_url'] = str(update_data['link_url'])
         
         for key, value in update_data.items():
-            setattr(link, key, value)
+            if key == 'link_url' and value is not None:
+                setattr(link, key, str(value))
+            else:
+                setattr(link, key, value)
         
         db.commit()
         db.refresh(link)
