@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, HttpUrl, ConfigDict
+from uuid import UUID
 
 # User schemas
 class UserBase(BaseModel):

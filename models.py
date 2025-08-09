@@ -6,11 +6,11 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 def generate_uuid():
-    return str(uuid.uuid4())
+    return uuid.uuid4()
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
@@ -27,8 +27,8 @@ class User(Base):
 
 class SocialLink(Base):
     __tablename__ = "social_links"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     platform_name = Column(String, nullable=False)
     link_url = Column(String, nullable=False)
 
@@ -36,8 +36,8 @@ class SocialLink(Base):
 
 class PortfolioItem(Base):
     __tablename__ = "portfolio_items"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     media_url = Column(String, nullable=True)
@@ -46,8 +46,8 @@ class PortfolioItem(Base):
 
 class WorkExperience(Base):
     __tablename__ = "work_experience"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     company_name = Column(String, nullable=False)
     role = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
@@ -58,8 +58,8 @@ class WorkExperience(Base):
 
 class QRCode(Base):
     __tablename__ = "qr_codes"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     qr_code_url = Column(String, nullable=False)
     last_generated_at = Column(DateTime, default=datetime.utcnow)
 
@@ -67,8 +67,8 @@ class QRCode(Base):
 
 class Analytics(Base):
     __tablename__ = "analytics"
-    id = Column(String, primary_key=True, default=generate_uuid, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     event_type = Column(String, nullable=False)  # e.g., qr_scan, link_click
     event_data = Column(Text, nullable=True)  # JSON string with details like geo/IP, link clicked, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
