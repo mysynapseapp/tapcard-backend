@@ -1,0 +1,76 @@
+{
+  "users": [
+    {
+      "id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "username": "testuser1",
+      "email": "test1@example.com",
+      "bio": "Test user 1",
+      "dob": "1990-01-01",
+      "created_at": "2025-08-11T13:36:26.578337",
+      "updated_at": "2025-08-11T13:36:26.579337"
+    },
+    {
+      "id": "9331b918-0b0b-4452-951f-b3ae7cff51f4",
+      "username": "testuser2",
+      "email": "test2@example.com",
+      "bio": "Test user 2",
+      "dob": "1990-01-02",
+      "created_at": "2025-08-11T13:36:26.579337",
+      "updated_at": "2025-08-11T13:36:26.579337"
+    },
+    {
+      "id": "f87f35b4-3c2e-4f7f-b0aa-6f24e1a9052f",
+      "username": "testuser3",
+      "email": "test3@example.com",
+      "bio": "Test user 3",
+      "dob": "1990-01-03",
+      "created_at": "2025-08-11T13:36:26.579337",
+      "updated_at": "2025-08-11T13:36:26.579337"
+    }
+  ],
+  "social_links": [
+    {
+      "id": "9009b70d-deea-422a-bf45-53e5371ba168",
+      "user_id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "platform_name": "github",
+      "link_url": "https://github.com/testuser"
+    }
+  ],
+  "portfolio_items": [
+    {
+      "id": "4b2487da-9364-449d-a92f-42fe6922783e",
+      "user_id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "title": "Test Project",
+      "description": "A test project",
+      "media_url": "https://example.com/project.jpg"
+    }
+  ],
+  "work_experiences": [
+    {
+      "id": "601b1925-8086-44f1-8eec-f0c60a15013b",
+      "user_id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "company_name": "Test Company",
+      "role": "Developer",
+      "start_date": "2020-01-01",
+      "end_date": "2023-12-31",
+      "description": "Test work experience"
+    }
+  ],
+  "qr_codes": [
+    {
+      "id": "9047ef88-5bcd-40a7-9cf1-3abf3a5b8bcc",
+      "user_id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "qr_code_url": "https://example.com/qr.png",
+      "last_generated_at": "2025-08-11T13:36:26.580338"
+    }
+  ],
+  "analytics": [
+    {
+      "id": "01544ef3-d85a-4209-a470-44828ad6d670",
+      "user_id": "8aaeb43a-f6cf-4030-9641-d2396a1dbeba",
+      "event_type": "qr_scan",
+      "event_data": "{\"location\": \"test\"}",
+      "created_at": "2025-08-11T13:36:26.580338"
+    }
+  ]
+}

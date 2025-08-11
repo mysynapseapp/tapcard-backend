@@ -108,3 +108,32 @@ def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+@router.get("/api/user/profile/{user_id}", response_model=schemas.UserProfile)
+def get_user_profile_by_id(user_id: str, db: Session = Depends(get_db)):
+    """
+    Get public user profile by user ID
+    This endpoint is publicly accessible and returns user details without authentication
+    """
+    try:
+        # Convert string user_id to UUID
+        from uuid import UUID
+        user_uuid = UUID(user_id)
+        
+        # Query user with all related data
+        user = db.query(models.User).filter(models.User.id == user_uuid).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Return user profile using the new UserProfile schema
+        return schemas.UserProfile.from_orm(user)
+        
+    except ValueError:
+        # Handle invalid UUID format
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    except Exception as e:
+        print(f"Error fetching user profile: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch user profile: {str(e)}")

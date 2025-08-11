@@ -61,6 +61,56 @@ class UserOut(BaseModel):
         }
         return cls(**data)
 
+class UserProfile(BaseModel):
+    id: str
+    username: str
+    bio: Optional[str] = None
+    dob: Optional[date] = None
+    social_links: List['SocialLinkOut'] = []
+    portfolio_items: List['PortfolioItemOut'] = []
+    work_experiences: List['WorkExperienceOut'] = []
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert ORM object with UUID fields to string for public profile"""
+        from datetime import datetime
+        
+        # Load social links
+        social_links_data = []
+        if hasattr(obj, 'social_links') and obj.social_links:
+            for link in obj.social_links:
+                social_links_data.append(SocialLinkOut.from_orm(link))
+        
+        # Load portfolio items
+        portfolio_items_data = []
+        if hasattr(obj, 'portfolio_items') and obj.portfolio_items:
+            for item in obj.portfolio_items:
+                portfolio_items_data.append(PortfolioItemOut.from_orm(item))
+        
+        # Load work experiences
+        work_experiences_data = []
+        if hasattr(obj, 'work_experiences') and obj.work_experiences:
+            for exp in obj.work_experiences:
+                work_experiences_data.append(WorkExperienceOut.from_orm(exp))
+        
+        # Handle missing created_at
+        created_at = obj.created_at if hasattr(obj, 'created_at') and obj.created_at else datetime.utcnow()
+        
+        data = {
+            'id': str(obj.id),
+            'username': obj.username,
+            'bio': obj.bio,
+            'dob': obj.dob,
+            'social_links': social_links_data,
+            'portfolio_items': portfolio_items_data,
+            'work_experiences': work_experiences_data,
+            'created_at': created_at
+        }
+        return cls(**data)
+
 # Auth schemas
 class Token(BaseModel):
     access_token: str
