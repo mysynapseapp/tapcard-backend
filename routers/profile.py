@@ -82,6 +82,14 @@ def update_profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db
             if existing_user:
                 raise HTTPException(status_code=400, detail="Username already taken")
         
+        # Validate fullname if provided
+        if 'fullname' in update_data and update_data['fullname']:
+            fullname = update_data['fullname'].strip()
+            if len(fullname) < 2:
+                raise HTTPException(status_code=400, detail="Full name must be at least 2 characters")
+            if len(fullname) > 100:
+                raise HTTPException(status_code=400, detail="Full name must be less than 100 characters")
+        
         # Validate email if provided
         if 'email' in update_data and update_data['email']:
             email = update_data['email'].strip()

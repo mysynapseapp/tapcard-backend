@@ -5,6 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 from database import get_db
 from models import User, Follow
+import schemas
 from schemas import UserSearchResponse, FollowResponse
 from routers.auth import get_current_user
 
@@ -193,3 +194,16 @@ def get_following(
         ))
     
     return results
+
+@router.get("/profile/{user_id}", response_model=schemas.UserProfile)
+def get_user_profile_with_counts(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get user profile with followers/following counts"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return schemas.UserProfile.from_orm(user)

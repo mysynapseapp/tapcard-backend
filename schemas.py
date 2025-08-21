@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
+    fullname: Optional[str] = None
     bio: Optional[str] = None
     dob: Optional[date] = None
 
@@ -27,9 +28,12 @@ class UserOut(BaseModel):
     id: str
     username: str
     email: str
+    fullname: str
     bio: Optional[str] = None
     dob: Optional[date] = None
     social_links: List['SocialLinkOut'] = []
+    followers_count: int = 0
+    following_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -46,6 +50,10 @@ class UserOut(BaseModel):
             for link in obj.social_links:
                 social_links_data.append(SocialLinkOut.from_orm(link))
         
+        # Calculate followers and following counts
+        followers_count = len(obj.followers) if hasattr(obj, 'followers') and obj.followers else 0
+        following_count = len(obj.following) if hasattr(obj, 'following') and obj.following else 0
+        
         # Handle missing created_at/updated_at
         created_at = obj.created_at if hasattr(obj, 'created_at') and obj.created_at else datetime.utcnow()
         updated_at = obj.updated_at if hasattr(obj, 'updated_at') and obj.updated_at else datetime.utcnow()
@@ -54,9 +62,12 @@ class UserOut(BaseModel):
             'id': str(obj.id),
             'username': obj.username,
             'email': obj.email,
+            'fullname': obj.fullname,
             'bio': obj.bio,
             'dob': obj.dob,
             'social_links': social_links_data,
+            'followers_count': followers_count,
+            'following_count': following_count,
             'created_at': created_at,
             'updated_at': updated_at
         }
@@ -65,11 +76,14 @@ class UserOut(BaseModel):
 class UserProfile(BaseModel):
     id: str
     username: str
+    fullname: str
     bio: Optional[str] = None
     dob: Optional[date] = None
     social_links: List['SocialLinkOut'] = []
     portfolio_items: List['PortfolioItemOut'] = []
     work_experiences: List['WorkExperienceOut'] = []
+    followers_count: int = 0
+    following_count: int = 0
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -97,17 +111,24 @@ class UserProfile(BaseModel):
             for exp in obj.work_experiences:
                 work_experiences_data.append(WorkExperienceOut.from_orm(exp))
         
+        # Calculate followers and following counts
+        followers_count = len(obj.followers) if hasattr(obj, 'followers') and obj.followers else 0
+        following_count = len(obj.following) if hasattr(obj, 'following') and obj.following else 0
+        
         # Handle missing created_at
         created_at = obj.created_at if hasattr(obj, 'created_at') and obj.created_at else datetime.utcnow()
         
         data = {
             'id': str(obj.id),
             'username': obj.username,
+            'fullname': obj.fullname,
             'bio': obj.bio,
             'dob': obj.dob,
             'social_links': social_links_data,
             'portfolio_items': portfolio_items_data,
             'work_experiences': work_experiences_data,
+            'followers_count': followers_count,
+            'following_count': following_count,
             'created_at': created_at
         }
         return cls(**data)
