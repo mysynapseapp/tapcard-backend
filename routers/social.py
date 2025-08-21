@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from database import get_db
 from models import User, Follow
 from schemas import UserSearchResponse, FollowResponse
 from routers.auth import get_current_user
 
-router = APIRouter(prefix="/social", tags=["social"])
+router = APIRouter(prefix="", tags=["social"])
 
 @router.post("/follow/{user_id}")
 def follow_user(
@@ -64,36 +64,59 @@ def unfollow_user(
 
 @router.get("/search", response_model=List[UserSearchResponse])
 def search_users(
-    username: str = Query(..., min_length=1),
+    q: str = Query(..., min_length=1, description="Search query for username, fullname, or email"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Search users by username"""
-    users = db.query(User).filter(
-        User.username.ilike(f"%{username}%")
-    ).all()
-    
-    results = []
-    for user in users:
-        followers_count = db.query(Follow).filter(Follow.following_id == user.id).count()
-        following_count = db.query(Follow).filter(Follow.follower_id == user.id).count()
+    """Search users by username, fullname, or email"""
+    try:
+        # Search by username (case-insensitive)
+        username_results = db.query(User).filter(
+            User.username.ilike(f"%{q}%")
+        ).limit(limit).all()
         
-        # Check if current user is following this user
-        is_following = db.query(Follow).filter(
-            and_(Follow.follower_id == current_user.id, Follow.following_id == user.id)
-        ).first() is not None
+        # Search by full name (case-insensitive)
+        name_results = db.query(User).filter(
+            User.fullname.ilike(f"%{q}%")
+        ).limit(limit).all()
         
-        results.append(UserSearchResponse(
-            id=str(user.id),
-            username=user.username,
-            fullname=user.fullname,
-            bio=user.bio,
-            followers_count=followers_count,
-            following_count=following_count,
-            is_following=is_following
-        ))
-    
-    return results
+        # Search by email (case-insensitive)
+        email_results = db.query(User).filter(
+            User.email.ilike(f"%{q}%")
+        ).limit(limit).all()
+        
+        # Combine and deduplicate results
+        all_users = list(set(username_results + name_results + email_results))
+        
+        # Limit final results
+        final_results = all_users[:limit]
+        
+        # Build response
+        results = []
+        for user in final_results:
+            followers_count = db.query(Follow).filter(Follow.following_id == user.id).count()
+            following_count = db.query(Follow).filter(Follow.follower_id == user.id).count()
+            
+            # Check if current user is following this user
+            is_following = db.query(Follow).filter(
+                and_(Follow.follower_id == current_user.id, Follow.following_id == user.id)
+            ).first() is not None
+            
+            results.append(UserSearchResponse(
+                id=str(user.id),
+                username=user.username,
+                fullname=user.fullname,
+                bio=user.bio,
+                followers_count=followers_count,
+                following_count=following_count,
+                is_following=is_following
+            ))
+        
+        return results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 @router.get("/followers/{user_id}", response_model=List[UserSearchResponse])
 def get_followers(
