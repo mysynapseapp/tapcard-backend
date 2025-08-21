@@ -13,6 +13,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    fullname: str
     bio: Optional[str] = None
     dob: Optional[date] = None
 
@@ -208,5 +209,22 @@ class AnalyticsOut(BaseModel):
     event_type: str
     event_data: Optional[str] = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# Social schemas
+class UserSearchResponse(BaseModel):
+    id: str
+    username: str
+    fullname: str
+    bio: Optional[str] = None
+    followers_count: int
+    following_count: int
+    is_following: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class FollowResponse(BaseModel):
+    message: str
 
     model_config = ConfigDict(from_attributes=True)

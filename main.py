@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import httpx
 import asyncio
 
-from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics
+from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social
 from database import engine, Base
 import models
 
@@ -60,6 +60,7 @@ app.include_router(portfolio.router, prefix="/api/user/portfolio", tags=["portfo
 app.include_router(work_experience.router, prefix="/api/user/work-experience", tags=["work_experience"])
 app.include_router(qr_code.router, prefix="/api/user/qr-code", tags=["qr_code"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(social.router, prefix="/api/social", tags=["social"])
 
 # Root route
 @app.get("/", tags=["root"])

@@ -14,6 +14,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
+    fullname = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     dob = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -24,6 +25,20 @@ class User(Base):
     work_experiences = relationship("WorkExperience", back_populates="user", cascade="all, delete-orphan")
     qr_codes = relationship("QRCode", back_populates="user", cascade="all, delete-orphan")
     analytics = relationship("Analytics", back_populates="user", cascade="all, delete-orphan")
+    
+    # Follow relationships
+    following = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower", cascade="all, delete-orphan")
+    followers = relationship("Follow", foreign_keys="Follow.following_id", back_populates="following", cascade="all, delete-orphan")
+
+class Follow(Base):
+    __tablename__ = "follows"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    follower_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    following_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    follower = relationship("User", foreign_keys=[follower_id], back_populates="following")
+    following = relationship("User", foreign_keys=[following_id], back_populates="followers")
 
 class SocialLink(Base):
     __tablename__ = "social_links"

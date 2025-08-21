@@ -65,6 +65,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
             username=user.username,
             email=user.email,
             password_hash=hashed_password,
+            fullname=user.fullname,
             bio=user.bio if user.bio else None,
             dob=user.dob if user.dob else None,
         )
@@ -126,3 +127,22 @@ def forgot_password(email: schemas.Login, db: Session = Depends(get_db)):
 def reset_password():
     # Implement your reset password logic here
     return {"message": "Password reset successful"}
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = get_user_by_email(db, email=email)
+    if user is None:
+        raise credentials_exception
+    return user

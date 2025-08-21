@@ -68,6 +68,7 @@ def migrate_database():
                     username VARCHAR(255) UNIQUE NOT NULL,
                     email VARCHAR(255) UNIQUE NOT NULL,
                     password_hash VARCHAR(255) NOT NULL,
+                    fullname VARCHAR(255) NOT NULL,
                     bio TEXT,
                     dob DATE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +97,7 @@ def migrate_database():
                     username = user_dict.get('username', f"user_{str(new_id)[:8]}")
                     email = user_dict.get('email', f"{username}@example.com")
                     password_hash = user_dict.get('password_hash', 'placeholder_hash')
+                    fullname = user_dict.get('fullname', username)  # Use username as fallback
                     bio = user_dict.get('bio')
                     dob = user_dict.get('dob')
                     created_at = user_dict.get('created_at', datetime.utcnow())
@@ -103,14 +105,15 @@ def migrate_database():
                     
                     # Insert into new table
                     insert_sql = """
-                        INSERT INTO users_new (id, username, email, password_hash, bio, dob, created_at, updated_at)
-                        VALUES (:id, :username, :email, :password_hash, :bio, :dob, :created_at, :updated_at)
+                        INSERT INTO users_new (id, username, email, password_hash, fullname, bio, dob, created_at, updated_at)
+                        VALUES (:id, :username, :email, :password_hash, :fullname, :bio, :dob, :created_at, :updated_at)
                     """
                     connection.execute(text(insert_sql), {
                         'id': new_id,
                         'username': username,
                         'email': email,
                         'password_hash': password_hash,
+                        'fullname': fullname,
                         'bio': bio,
                         'dob': dob,
                         'created_at': created_at,
