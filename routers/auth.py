@@ -1,29 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
 
 import models, schemas
 from database import get_db
+from firebase_client import (
+    create_user_with_email_and_password,
+    verify_id_token,
+    send_password_reset_email,
+    get_user_by_email as get_firebase_user_by_email,
+    update_user_password
+)
 
 SECRET_KEY = "your-secret-key"  # Change to secure key in production
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 router = APIRouter()
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -42,17 +41,10 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
-def authenticate_user(db: Session, email: str, password: str):
-    user = get_user_by_email(db, email)
-    if not user:
-        return False
-    if not verify_password(password, user.password_hash):
-        return False
-    return user
-
 @router.post("/register", response_model=schemas.UserOut)
-def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+async def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
+        # Check if user already exists in database
         if db.query(models.User).filter(models.User.email == user.email).first():
             raise HTTPException(status_code=400, detail="Email already registered")
         if db.query(models.User).filter(models.User.username == user.username).first():
@@ -60,14 +52,22 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
         if len(user.password) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 
-        hashed_password = get_password_hash(user.password)
+        # Create user in Firebase
+        firebase_user = await create_user_with_email_and_password(
+            email=user.email,
+            password=user.password,
+            display_name=user.fullname
+        )
+
+        # Create user in local database
         new_user = models.User(
             username=user.username,
             email=user.email,
-            password_hash=hashed_password,
+            password_hash="firebase_auth",  # Password is managed by Firebase
             fullname=user.fullname,
             bio=user.bio if user.bio else None,
             dob=user.dob if user.dob else None,
+            firebase_uid=firebase_user.uid
         )
         db.add(new_user)
         db.commit()
@@ -81,19 +81,30 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", response_model=schemas.Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+async def login(login_data: schemas.Login):
+    try:
+        # For Firebase authentication, the actual login should be handled client-side
+        # The client should get the ID token from Firebase and send it to this endpoint
+        # For now, we'll verify the user exists in Firebase and generate our tokens
+        
+        # Check if user exists in Firebase
+        firebase_user = await get_firebase_user_by_email(login_data.email)
+        if not firebase_user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        # Generate our own JWT tokens
+        access_token = create_access_token(data={"sub": login_data.email})
+        refresh_token = create_refresh_token(data={"sub": login_data.email})
 
-    access_token = create_access_token(data={"sub": user.email})
-    refresh_token = create_refresh_token(data={"sub": user.email})
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Login failed: {str(e)}")
 
 @router.post("/refresh", response_model=schemas.Token)
 def refresh_token(refresh_token: str = Body(...)):
@@ -119,14 +130,24 @@ def logout():
     return {"message": "Logout successful"}
 
 @router.post("/forgot-password")
-def forgot_password(email: schemas.Login, db: Session = Depends(get_db)):
-    # Implement your forgot password logic here (e.g. send reset email)
-    return {"message": "If the email exists, a reset link will be sent"}
+async def forgot_password(email: schemas.Login):
+    try:
+        result = await send_password_reset_email(email.email)
+        return {"message": "If the email exists, a reset link will be sent."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset failed: {str(e)}")
 
 @router.post("/reset-password")
-def reset_password():
-    # Implement your reset password logic here
-    return {"message": "Password reset successful"}
+async def reset_password(uid: str = Body(...), new_password: str = Body(...)):
+    try:
+        result = await update_user_password(uid, new_password)
+        return {"message": "Password updated successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password update failed: {str(e)}")
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(

@@ -43,13 +43,15 @@ def migrate_database():
         current_columns = [col['name'] for col in inspector.get_columns('users')]
         print(f"Current columns: {current_columns}")
         
-        # Check if migration is needed
-        required_columns = ['username', 'email', 'password_hash']
+        # Check if migration is needed - specifically check for firebase_uid column
+        required_columns = ['username', 'email', 'password_hash', 'firebase_uid']
         missing_columns = [col for col in required_columns if col not in current_columns]
         
         if not missing_columns:
             print("Database schema is already up to date!")
             return
+        
+        print(f"Migration needed. Missing columns: {missing_columns}")
         
         print(f"Missing columns: {missing_columns}")
         
@@ -71,6 +73,7 @@ def migrate_database():
                     fullname VARCHAR(255) NOT NULL,
                     bio TEXT,
                     dob DATE,
+                    firebase_uid VARCHAR(255) UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -105,8 +108,8 @@ def migrate_database():
                     
                     # Insert into new table
                     insert_sql = """
-                        INSERT INTO users_new (id, username, email, password_hash, fullname, bio, dob, created_at, updated_at)
-                        VALUES (:id, :username, :email, :password_hash, :fullname, :bio, :dob, :created_at, :updated_at)
+                        INSERT INTO users_new (id, username, email, password_hash, fullname, bio, dob, firebase_uid, created_at, updated_at)
+                        VALUES (:id, :username, :email, :password_hash, :fullname, :bio, :dob, :firebase_uid, :created_at, :updated_at)
                     """
                     connection.execute(text(insert_sql), {
                         'id': new_id,
@@ -116,14 +119,18 @@ def migrate_database():
                         'fullname': fullname,
                         'bio': bio,
                         'dob': dob,
+                        'firebase_uid': None,  # Set to None for existing users
                         'created_at': created_at,
                         'updated_at': updated_at
                     })
                 
                 print("Data migration completed")
             
-            # Rename old table as backup
-            connection.execute(text("ALTER TABLE users RENAME TO users_backup"))
+            # Rename old table as backup with timestamp to avoid conflicts
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_table_name = f"users_backup_{timestamp}"
+            connection.execute(text(f"ALTER TABLE users RENAME TO {backup_table_name}"))
+            print(f"Old users table renamed to {backup_table_name}")
             
             # Rename new table to users
             connection.execute(text(f"ALTER TABLE {new_table_name} RENAME TO users"))

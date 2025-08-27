@@ -17,6 +17,7 @@ class User(Base):
     fullname = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     dob = Column(Date, nullable=True)
+    firebase_uid = Column(String, unique=True, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

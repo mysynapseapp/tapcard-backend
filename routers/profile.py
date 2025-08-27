@@ -8,7 +8,7 @@ import uuid
 
 import models, schemas
 from database import get_db
-from routers.auth import oauth2_scheme, verify_password, get_password_hash
+from routers.auth import oauth2_scheme
 
 router = APIRouter()
 
