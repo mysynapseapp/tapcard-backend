@@ -133,7 +133,7 @@ def logout():
 async def forgot_password(email: schemas.Login):
     try:
         result = await send_password_reset_email(email.email)
-        return {"message": "If the email exists, a reset link will be sent."}
+        return result
     except HTTPException:
         raise
     except Exception as e:
