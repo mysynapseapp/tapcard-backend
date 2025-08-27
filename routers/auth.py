@@ -130,9 +130,9 @@ def logout():
     return {"message": "Logout successful"}
 
 @router.post("/forgot-password")
-async def forgot_password(email: schemas.Login):
+async def forgot_password(forgot_data: schemas.ForgotPassword):
     try:
-        result = await send_password_reset_email(email.email)
+        result = await send_password_reset_email(forgot_data.email)
         return result
     except HTTPException:
         raise

@@ -147,6 +147,9 @@ class Login(BaseModel):
     email: EmailStr
     password: str
 
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
 # Social Link schemas
 class SocialLinkBase(BaseModel):
     platform_name: str
