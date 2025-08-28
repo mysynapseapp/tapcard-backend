@@ -130,10 +130,36 @@ def logout():
     return {"message": "Logout successful"}
 
 @router.post("/forgot-password")
-async def forgot_password(forgot_data: schemas.ForgotPassword):
+async def forgot_password(forgot_data: schemas.ForgotPassword, db: Session = Depends(get_db)):
     try:
+        # Check if user exists in local database
+        user = get_user_by_email(db, forgot_data.email)
+        if not user:
+            # Don't reveal that the user doesn't exist for security reasons
+            return {
+                "success": True,
+                "message": "If the email exists, a reset link will be sent.",
+                "reset_link": None
+            }
+        
         result = await send_password_reset_email(forgot_data.email)
         return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset failed: {str(e)}")
+
+@router.post("/reset-password-direct")
+async def reset_password_direct(reset_data: schemas.ResetPassword, db: Session = Depends(get_db)):
+    try:
+        # Check if user exists in local database
+        user = get_user_by_email(db, reset_data.email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Update the user's password
+        await update_user_password(user.firebase_uid, reset_data.new_password)
+        return {"message": "Password has been reset successfully."}
     except HTTPException:
         raise
     except Exception as e:

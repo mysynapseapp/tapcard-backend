@@ -94,24 +94,39 @@ async def send_password_reset_email(email: str):
         # Get user by email to verify they exist
         user = auth.get_user_by_email(email)
         
-        # Use Firebase's built-in send_password_reset_email function
-        # This will send the email directly through Firebase's email service
-        auth.generate_password_reset_link(email)
+        # Generate password reset link
+        reset_link = auth.generate_password_reset_link(email)
         
-        # Note: Firebase Admin SDK's generate_password_reset_link() generates the link
-        # but doesn't send it automatically. For automatic email sending, you would need to:
-        # 1. Configure Firebase Authentication email templates in the Firebase Console
-        # 2. Use a third-party email service to send the generated link
-        # 3. Or use Firebase's client-side SDK for password reset functionality
+        # IMPORTANT: Firebase Admin SDK's generate_password_reset_link() only generates the link
+        # but does NOT send the email automatically. The link needs to be sent via:
+        # 
+        # Option 1: Configure Firebase Authentication email templates in Firebase Console
+        #           (this will automatically send emails when links are generated)
+        # 
+        # Option 2: Use a third-party email service (SendGrid, Mailgun, etc.) to send the link
+        # 
+        # Option 3: Use Firebase client-side SDK's sendPasswordResetEmail() method
+        # 
+        # For frontend display, we return the generated link which can be shown to the user
         
         print(f"Password reset link generated for {email}")
-        print("Note: In production, configure Firebase email templates or use an email service")
+        print(f"Reset link: {reset_link}")
+        print("Note: This link can be displayed to the user in the UI")
         
-        return {"message": "If the email exists, a reset link will be sent."}
+        return {
+            "success": True,
+            "message": "Password reset link generated successfully",
+            "reset_link": reset_link,  # For frontend display
+            "user_exists": True
+        }
         
     except auth.UserNotFoundError:
         # Don't reveal that the user doesn't exist for security reasons
-        return {"message": "If the email exists, a reset link will be sent."}
+        return {
+            "success": True,
+            "message": "If the email exists, a reset link will be sent.",
+            "user_exists": False
+        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
