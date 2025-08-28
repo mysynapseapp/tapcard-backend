@@ -150,6 +150,10 @@ class Login(BaseModel):
 class ForgotPassword(BaseModel):
     email: EmailStr
 
+class ResetPassword(BaseModel):
+    email: EmailStr
+    new_password: str
+
 # Social Link schemas
 class SocialLinkBase(BaseModel):
     platform_name: str
