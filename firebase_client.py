@@ -1,156 +1,75 @@
 import firebase_admin
 from firebase_admin import auth, credentials
-from fastapi import HTTPException, status
 import os
+import asyncio
+from fastapi import HTTPException, status
+from dotenv import load_dotenv
 
-# Initialize Firebase Admin SDK
+# ---------------------- Load .env ---------------------- #
+load_dotenv()  # Automatically loads .env in the current working directory
+
+# ---------------------- Firebase Initialization ---------------------- #
+
 def initialize_firebase():
+    if firebase_admin._apps:
+        return  # already initialized
+
+    required_vars = [
+        "FIREBASE_TYPE",
+        "FIREBASE_PROJECT_ID",
+        "FIREBASE_PRIVATE_KEY_ID",
+        "FIREBASE_PRIVATE_KEY",
+        "FIREBASE_CLIENT_EMAIL",
+        "FIREBASE_CLIENT_ID",
+        "FIREBASE_AUTH_URI",
+        "FIREBASE_TOKEN_URI",
+        "FIREBASE_AUTH_PROVIDER_CERT_URL",
+        "FIREBASE_CLIENT_CERT_URL",
+    ]
+
+    missing = [v for v in required_vars if not os.getenv(v)]
+    if missing:
+        raise RuntimeError(f"❌ Missing Firebase environment variables: {missing}")
+
+    # Build Firebase credential dictionary
+    firebase_config = {
+        "type": os.getenv("FIREBASE_TYPE"),
+        "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+        "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+        "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n"),
+        "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+        "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+        "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+        "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+        "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
+        "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL"),
+    }
+
     try:
-        # For development, you can use a service account JSON file
-        # cred = credentials.Certificate("path/to/serviceAccountKey.json")
-        # firebase_admin.initialize_app(cred)
-        
-        # For production, use environment variables
-        firebase_config = {
-            "type": os.getenv("FIREBASE_TYPE"),
-            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n') if os.getenv("FIREBASE_PRIVATE_KEY") else None,
-            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-            "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-            "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
-            "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
-            "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
-            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL")
-        }
-        
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(firebase_config)
-            firebase_admin.initialize_app(cred)
-            
+        cred = credentials.Certificate(firebase_config)
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase initialized successfully")
     except Exception as e:
-        print(f"Firebase initialization error: {str(e)}")
+        print(f"❌ Firebase initialization failed: {str(e)}")
         raise
 
 # Initialize Firebase on import
-try:
-    initialize_firebase()
-except:
-    print("Firebase initialization failed. Please set up environment variables.")
+initialize_firebase()
 
-async def create_user_with_email_and_password(email: str, password: str, display_name: str = None):
-    try:
-        user_record = auth.create_user(
-            email=email,
-            password=password,
-            display_name=display_name
-        )
-        return user_record
-    except auth.EmailAlreadyExistsError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"User creation failed: {str(e)}"
-        )
-
-async def sign_in_with_email_and_password(email: str, password: str):
-    try:
-        # Firebase Admin SDK doesn't have direct sign-in method
-        # This would typically be handled on the client side
-        # For backend verification, we'll verify the ID token
-        return {"message": "Sign-in should be handled client-side with Firebase Auth SDK"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}"
-        )
+# ---------------------- Token Verification ---------------------- #
 
 async def verify_id_token(id_token: str):
+    """
+    Verifies a Firebase ID token asynchronously.
+    Raises HTTPException(401) if token is invalid or expired.
+    """
+    loop = asyncio.get_event_loop()
     try:
-        decoded_token = auth.verify_id_token(id_token)
+        decoded_token = await loop.run_in_executor(None, auth.verify_id_token, id_token)
         return decoded_token
     except auth.ExpiredIdTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     except auth.InvalidIdTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token verification failed: {str(e)}"
-        )
-
-async def send_password_reset_email(email: str):
-    try:
-        # Get user by email to verify they exist
-        user = auth.get_user_by_email(email)
-        
-        # Generate password reset link
-        reset_link = auth.generate_password_reset_link(email)
-        
-        # IMPORTANT: Firebase Admin SDK's generate_password_reset_link() only generates the link
-        # but does NOT send the email automatically. The link needs to be sent via:
-        # 
-        # Option 1: Configure Firebase Authentication email templates in Firebase Console
-        #           (this will automatically send emails when links are generated)
-        # 
-        # Option 2: Use a third-party email service (SendGrid, Mailgun, etc.) to send the link
-        # 
-        # Option 3: Use Firebase client-side SDK's sendPasswordResetEmail() method
-        # 
-        # For frontend display, we return the generated link which can be shown to the user
-        
-        print(f"Password reset link generated for {email}")
-        print(f"Reset link: {reset_link}")
-        print("Note: This link can be displayed to the user in the UI")
-        
-        return {
-            "success": True,
-            "message": "Password reset link generated successfully",
-            "reset_link": reset_link,  # For frontend display
-            "user_exists": True
-        }
-        
-    except auth.UserNotFoundError:
-        # Don't reveal that the user doesn't exist for security reasons
-        return {
-            "success": True,
-            "message": "If the email exists, a reset link will be sent.",
-            "user_exists": False
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Password reset failed: {str(e)}"
-        )
-
-async def get_user_by_email(email: str):
-    try:
-        user = auth.get_user_by_email(email)
-        return user
-    except auth.UserNotFoundError:
-        return None
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching user: {str(e)}"
-        )
-
-async def update_user_password(uid: str, new_password: str):
-    try:
-        auth.update_user(uid, password=new_password)
-        return {"message": "Password updated successfully"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Password update failed: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token verification failed: {str(e)}")

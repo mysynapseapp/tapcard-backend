@@ -1,43 +1,61 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from typing import List
-from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
+from datetime import datetime
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import models, schemas
 from database import get_db
-from routers.auth import oauth2_scheme
-from datetime import datetime
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 
 router = APIRouter()
+security = HTTPBearer()
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
-    from jose import JWTError, jwt
-    SECRET_KEY = "your-secret-key"
-    ALGORITHM = "HS256"
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+# Make sure Firebase Admin is initialized somewhere in your app
+# Example:
+# cred = firebase_admin.credentials.Certificate("path/to/serviceAccountKey.json")
+# firebase_admin.initialize_app(cred)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> models.User:
+    token = credentials.credentials
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+        decoded_token = firebase_auth.verify_id_token(token)
+        email = decoded_token.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Firebase token"
+            )
+    except Exception as e:
+        print(f"Firebase token verification error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Firebase token"
+        )
+
     user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None:
-        raise credentials_exception
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
 
 class AnalyticsCreate(BaseModel):
     event_type: str
     event_data: str = None
 
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def log_event(event: AnalyticsCreate = Body(...), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def log_event(
+    event: AnalyticsCreate = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     new_event = models.Analytics(
         user_id=current_user.id,
         event_type=event.event_type,
@@ -49,7 +67,16 @@ def log_event(event: AnalyticsCreate = Body(...), db: Session = Depends(get_db),
     db.refresh(new_event)
     return {"message": "Event logged"}
 
+
 @router.get("/", response_model=List[schemas.AnalyticsOut])
-def get_analytics(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    events = db.query(models.Analytics).filter(models.Analytics.user_id == current_user.id).order_by(models.Analytics.created_at.desc()).all()
+def get_analytics(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    events = (
+        db.query(models.Analytics)
+        .filter(models.Analytics.user_id == current_user.id)
+        .order_by(models.Analytics.created_at.desc())
+        .all()
+    )
     return events
