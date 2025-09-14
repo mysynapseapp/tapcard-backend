@@ -64,7 +64,7 @@ def validate_url_format(url: str, platform: str) -> bool:
     return True
 
 
-@router.get("/", response_model=List[schemas.SocialLinkOut])
+@router.get("/social-links", response_model=List[schemas.SocialLinkOut])
 def get_social_links(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     try:
         links = db.query(models.SocialLink).filter(models.SocialLink.user_id == current_user.id).all()
@@ -74,7 +74,7 @@ def get_social_links(db: Session = Depends(get_db), current_user: models.User = 
         raise HTTPException(status_code=500, detail="Failed to fetch social links")
 
 
-@router.post("/", response_model=schemas.SocialLinkOut, status_code=status.HTTP_201_CREATED)
+@router.post("/social-links", response_model=schemas.SocialLinkOut, status_code=status.HTTP_201_CREATED)
 def create_social_link(
     social_link: schemas.SocialLinkCreate,
     db: Session = Depends(get_db),
@@ -105,7 +105,7 @@ def create_social_link(
         raise HTTPException(status_code=500, detail=f"Failed to create social link: {str(e)}")
 
 
-@router.put("/{link_id}", response_model=schemas.SocialLinkOut)
+@router.put("/social-links/{link_id}", response_model=schemas.SocialLinkOut)
 def update_social_link(
     link_id: str,
     social_link_update: schemas.SocialLinkUpdate,
@@ -149,7 +149,7 @@ def update_social_link(
         raise HTTPException(status_code=500, detail=f"Failed to update social link: {str(e)}")
 
 
-@router.delete("/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/social-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_social_link(
     link_id: str,
     db: Session = Depends(get_db),

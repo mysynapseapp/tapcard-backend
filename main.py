@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     print("🛑 App is shutting down...")
 
 # Create FastAPI app
-app = FastAPI(title="User Profile API", lifespan=lifespan)
+app = FastAPI(title="User Profile API", lifespan=lifespan, redirect_slashes=False)
 
 # CORS Middleware
 app.add_middleware(
@@ -55,7 +55,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/user", tags=["profile"])
-app.include_router(social_links.router, prefix="/api/user/social-links", tags=["social_links"])
+app.include_router(social_links.router, prefix="/api/user", tags=["social_links"])
 app.include_router(portfolio.router, prefix="/api/user/portfolio", tags=["portfolio"])
 app.include_router(work_experience.router, prefix="/api/user/work-experience", tags=["work_experience"])
 app.include_router(qr_code.router, prefix="/api/user/qr-code", tags=["qr_code"])
