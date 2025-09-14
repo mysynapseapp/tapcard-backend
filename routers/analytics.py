@@ -80,3 +80,29 @@ def get_analytics(
         .all()
     )
     return events
+
+
+@router.get("/stats")
+def get_analytics_stats(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    from sqlalchemy import func
+    stats = db.query(
+        models.Analytics.event_type,
+        func.count(models.Analytics.id).label('count')
+    ).filter(
+        models.Analytics.user_id == current_user.id
+    ).group_by(models.Analytics.event_type).all()
+
+    result = {}
+    for event_type, count in stats:
+        result[event_type] = count
+
+    # Ensure all expected stats are present
+    expected_stats = ['link_click', 'profile_view', 'qr_scan']
+    for stat in expected_stats:
+        if stat not in result:
+            result[stat] = 0
+
+    return result
