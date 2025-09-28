@@ -9,7 +9,7 @@ from database import engine, Base
 import models
 
 # Constants
-APP_URL = "https://tapcard-backend.onrender.com"
+APP_URL = "https://tapcard-backend-gkql.onrender.com"
 PING_INTERVAL = 5 * 60  # 5 minutes
 
 # Lifespan context manager for startup and shutdown logic
