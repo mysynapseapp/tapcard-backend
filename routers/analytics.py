@@ -1,22 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import func
+import jwt
 
 import models, schemas
 from database import get_db
-import firebase_admin
-from firebase_admin import auth as firebase_auth
+
+# JWT Config
+JWT_SECRET = "your_jwt_secret_key"  # ⚠️ Use env var in production
+JWT_ALGORITHM = "HS256"
 
 router = APIRouter()
 security = HTTPBearer()
-
-# Make sure Firebase Admin is initialized somewhere in your app
-# Example:
-# cred = firebase_admin.credentials.Certificate("path/to/serviceAccountKey.json")
-# firebase_admin.initialize_app(cred)
 
 
 def get_current_user(
@@ -25,18 +24,22 @@ def get_current_user(
 ) -> models.User:
     token = credentials.credentials
     try:
-        decoded_token = firebase_auth.verify_id_token(token)
-        email = decoded_token.get("email")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        email = payload.get("email")
         if not email:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Firebase token"
+                detail="Invalid JWT token: missing email"
             )
-    except Exception as e:
-        print(f"Firebase token verification error: {str(e)}")
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Firebase token"
+            detail="JWT token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid JWT token"
         )
 
     user = db.query(models.User).filter(models.User.email == email).first()
@@ -47,7 +50,7 @@ def get_current_user(
 
 class AnalyticsCreate(BaseModel):
     event_type: str
-    event_data: str = None
+    event_data: str | None = None
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -87,7 +90,6 @@ def get_analytics_stats(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    from sqlalchemy import func
     stats = db.query(
         models.Analytics.event_type,
         func.count(models.Analytics.id).label('count')
@@ -99,7 +101,6 @@ def get_analytics_stats(
     for event_type, count in stats:
         result[event_type] = count
 
-    # Ensure all expected stats are present
     expected_stats = ['link_click', 'profile_view', 'qr_scan']
     for stat in expected_stats:
         if stat not in result:

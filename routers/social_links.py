@@ -1,43 +1,45 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uuid
 import re
 from datetime import datetime
+from jose import JWTError, jwt
 
 import models, schemas
 from database import get_db
-import firebase_admin
-from firebase_admin import auth as firebase_auth
 
 router = APIRouter()
 security = HTTPBearer()
 
-# Initialize Firebase Admin somewhere in your app (main.py or startup)
-# cred = firebase_admin.credentials.Certificate("path/to/serviceAccountKey.json")
-# firebase_admin.initialize_app(cred)
+# ---------------- JWT CONFIG ---------------- #
+SECRET_KEY = "your_jwt_secret_key"  # ⚠️ Replace with environment variable
+ALGORITHM = "HS256"
 
 
+# ---------------- AUTH HELPER ---------------- #
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> models.User:
+    """
+    Verify JWT token, extract user email, and return user object.
+    """
     token = credentials.credentials
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     try:
-        decoded_token = firebase_auth.verify_id_token(token)
-        email = decoded_token.get("email")
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Firebase token"
-            )
-    except Exception as e:
-        print(f"Firebase token verification error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Firebase token"
-        )
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
@@ -45,6 +47,7 @@ def get_current_user(
     return user
 
 
+# ---------------- VALIDATION HELPER ---------------- #
 def validate_url_format(url: str, platform: str) -> bool:
     """Validate URL format based on platform"""
     if platform.lower() == 'youtube':
@@ -64,8 +67,14 @@ def validate_url_format(url: str, platform: str) -> bool:
     return True
 
 
+# ---------------- ROUTES ---------------- #
+
 @router.get("/social-links", response_model=List[schemas.SocialLinkOut])
-def get_social_links(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_social_links(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retrieve all social links for the authenticated user"""
     try:
         links = db.query(models.SocialLink).filter(models.SocialLink.user_id == current_user.id).all()
         return [schemas.SocialLinkOut.from_orm(link) for link in links]
@@ -80,6 +89,7 @@ def create_social_link(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Add a new social link for the current user"""
     try:
         if not validate_url_format(str(social_link.link_url), social_link.platform_name):
             raise HTTPException(
@@ -90,7 +100,8 @@ def create_social_link(
         new_link = models.SocialLink(
             user_id=current_user.id,
             platform_name=social_link.platform_name,
-            link_url=str(social_link.link_url)
+            link_url=str(social_link.link_url),
+            created_at=datetime.utcnow(),
         )
         db.add(new_link)
         db.commit()
@@ -112,6 +123,7 @@ def update_social_link(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Update an existing social link"""
     try:
         try:
             link_uuid = uuid.UUID(link_id)
@@ -128,6 +140,7 @@ def update_social_link(
 
         update_data = social_link_update.dict(exclude_unset=True)
 
+        # URL validation
         if 'link_url' in update_data:
             platform = update_data.get('platform_name', link.platform_name)
             if not validate_url_format(str(update_data['link_url']), platform):
@@ -155,6 +168,7 @@ def delete_social_link(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Delete a social link"""
     try:
         try:
             link_uuid = uuid.UUID(link_id)
