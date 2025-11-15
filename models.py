@@ -17,7 +17,6 @@ class User(Base):
     fullname = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     dob = Column(Date, nullable=True)
-    firebase_uid = Column(String, unique=True, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -57,6 +56,7 @@ class PortfolioItem(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     media_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="portfolio_items")
 
@@ -69,6 +69,7 @@ class WorkExperience(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="work_experiences")
 

@@ -137,7 +137,11 @@ class UserProfile(BaseModel):
 class Token(BaseModel):
     access_token: str
     refresh_token: str
-    
+
+    token_type: str
+
+class TokenOut(BaseModel):
+    access_token: str
     token_type: str
 
 class TokenData(BaseModel):
@@ -195,10 +199,26 @@ class PortfolioItemUpdate(BaseModel):
     description: Optional[str] = None
     media_url: Optional[HttpUrl] = None
 
-class PortfolioItemOut(PortfolioItemBase):
+class PortfolioItemOut(BaseModel):
     id: str
-
+    title: str
+    description: Optional[str] = None
+    media_url: Optional[HttpUrl] = None
+    created_at: datetime
+    
     model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert ORM object with UUID fields to string"""
+        data = {
+            'id': str(obj.id),
+            'title': obj.title,
+            'description': obj.description,
+            'media_url': obj.media_url,
+            'created_at': obj.created_at if hasattr(obj, 'created_at') else datetime.utcnow()
+        }
+        return cls(**data)
 
 # Work Experience schemas
 class WorkExperienceBase(BaseModel):
@@ -218,10 +238,30 @@ class WorkExperienceUpdate(BaseModel):
     end_date: Optional[date] = None
     description: Optional[str] = None
 
-class WorkExperienceOut(WorkExperienceBase):
+class WorkExperienceOut(BaseModel):
     id: str
-
+    company_name: str
+    role: str
+    start_date: date
+    end_date: Optional[date] = None
+    description: Optional[str] = None
+    created_at: datetime
+    
     model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert ORM object with UUID fields to string"""
+        data = {
+            'id': str(obj.id),
+            'company_name': obj.company_name,
+            'role': obj.role,
+            'start_date': obj.start_date,
+            'end_date': obj.end_date,
+            'description': obj.description,
+            'created_at': obj.created_at if hasattr(obj, 'created_at') else datetime.utcnow()
+        }
+        return cls(**data)
 
 # QR Code schemas
 class QRCodeOut(BaseModel):
