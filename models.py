@@ -25,6 +25,7 @@ class User(Base):
     work_experiences = relationship("WorkExperience", back_populates="user", cascade="all, delete-orphan")
     qr_codes = relationship("QRCode", back_populates="user", cascade="all, delete-orphan")
     analytics = relationship("Analytics", back_populates="user", cascade="all, delete-orphan")
+    passkey_credentials = relationship("PasskeyCredential", back_populates="user", cascade="all, delete-orphan")
     
     # Follow relationships
     following = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower", cascade="all, delete-orphan")
@@ -91,3 +92,17 @@ class Analytics(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="analytics")
+
+
+class PasskeyCredential(Base):
+    __tablename__ = "passkey_credentials"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    credential_id = Column(String, unique=True, nullable=False)
+    public_key = Column(Text, nullable=False)
+    sign_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    
+    user = relationship("User", back_populates="passkey_credentials")

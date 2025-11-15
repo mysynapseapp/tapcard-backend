@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 
 # Import your models
-from models import User, Base
+from models import User, Base, PasskeyCredential
 from database import DATABASE_URL
 
 load_dotenv()
