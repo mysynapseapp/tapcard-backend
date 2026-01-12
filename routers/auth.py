@@ -1,46 +1,21 @@
+"""
+Authentication router using Firebase for all auth operations.
+Frontend handles Firebase auth (login, register, reset password).
+Backend only verifies Firebase tokens and manages user profiles.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-import jwt
+from datetime import datetime
+import secrets
 
 import models, schemas
 from database import get_db
+from firebase_auth import verify_firebase_token, get_user_by_uid
 
 router = APIRouter()
 security = HTTPBearer()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-# ✅ JWT Config
-JWT_SECRET = "your_jwt_secret_key"  # ⚠️ Replace with env var in production
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_MINUTES = 60 * 24  # 1 day
-
-
-# ---------------- JWT Utility Functions ---------------- #
-def create_access_token(data: dict):
-    """Create a JWT access token"""
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRATION_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-
-def decode_access_token(token: str):
-    """Decode and verify JWT token"""
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
 
 
 # ---------------- Dependency ---------------- #
@@ -48,18 +23,26 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ):
-    """Verify JWT and get user"""
+    """
+    Verify Firebase ID token and get user from database.
+    The token is a Firebase ID token containing the firebase_uid.
+    """
     token = credentials.credentials
-    payload = decode_access_token(token)
-    email = payload.get("email")
-
-    if not email:
+    
+    # Verify Firebase ID token
+    try:
+        firebase_data = verify_firebase_token(token)
+    except HTTPException:
+        raise
+    
+    firebase_uid = firebase_data.get("uid")
+    if not firebase_uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
+            detail="Invalid Firebase token: missing uid",
         )
 
-    user = db.query(models.User).filter(models.User.email == email).first()
+    user = db.query(models.User).filter(models.User.firebase_uid == firebase_uid).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
@@ -67,54 +50,127 @@ def get_current_user(
 
 # ---------------- Routes ---------------- #
 
-@router.post("/register", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED)
-def register_user(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+@router.post("/google-login", response_model=schemas.UserOut)
+async def google_login(request: schemas.GoogleLoginRequest, db: Session = Depends(get_db)):
     """
-    User registration route — creates a new user account.
-    Expected body: { "username": "user", "email": "user@example.com", "password": "1234", "fullname": "Full Name" }
+    Sync Firebase user with backend database.
+    
+    Frontend sends the Firebase ID token after successful Firebase authentication.
+    Backend verifies the token and creates/updates user in database.
+    
+    Expected body: { "id_token": "firebase_id_token", "username": "desired_username" (optional) }
     """
-    # Check if user already exists
-    existing_user = db.query(models.User).filter(
-        (models.User.email == user_data.email) | (models.User.username == user_data.username)
-    ).first()
+    # 1. Verify Firebase ID token
+    try:
+        firebase_data = verify_firebase_token(request.id_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to verify Firebase token: {str(e)}",
+        )
 
-    if existing_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
+    firebase_uid = firebase_data.get("uid")
+    email = firebase_data.get("email", "")
+    name = firebase_data.get("name", "")
 
-    # Create new user
-    new_user = models.User(
-        username=user_data.username,
-        email=user_data.email,
-        password_hash=user_data.password,  # ⚠️ In prod, hash passwords!
-        fullname=user_data.fullname,
-        bio=user_data.bio,
-        dob=user_data.dob,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
+    if not firebase_uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Firebase token: missing uid",
+        )
 
-    db.add(new_user)
+    # 2. Check if user exists in our database
+    user = db.query(models.User).filter(models.User.firebase_uid == firebase_uid).first()
+
+    if user:
+        # User exists - update info if needed
+        if email and user.email != email:
+            user.email = email
+        if name and user.fullname != name:
+            user.fullname = name
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+    else:
+        # New user - create in database
+        # Use provided username or generate one from email
+        username = request.username
+        if not username:
+            # Generate username from email or name
+            if email:
+                username = email.split("@")[0]
+            elif name:
+                username = name.lower().replace(" ", "_")
+            else:
+                username = f"user_{secrets.token_hex(4)}"
+
+        # Ensure username is unique
+        existing_username = db.query(models.User).filter(models.User.username == username).first()
+        if existing_username:
+            username = f"{username}_{secrets.token_hex(4)}"
+
+        new_user = models.User(
+            firebase_uid=firebase_uid,
+            username=username,
+            email=email,
+            fullname=name,
+            bio=None,
+            dob=None,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        user = new_user
+
+    return schemas.UserOut.from_orm(user)
+
+
+@router.post("/link-account", response_model=schemas.UserOut)
+async def link_account(
+    request: schemas.LinkAccountRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Link an additional Firebase auth method to existing account.
+    Or update profile information.
+    
+    Expected body: { "id_token": "firebase_id_token" }
+    """
+    # Verify the new Firebase token
+    try:
+        firebase_data = verify_firebase_token(request.id_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to verify Firebase token: {str(e)}",
+        )
+
+    firebase_uid = firebase_data.get("uid")
+    email = firebase_data.get("email", "")
+    name = firebase_data.get("name", "")
+
+    # Update current user with Firebase data
+    if email:
+        current_user.email = email
+    if name:
+        current_user.fullname = name
+    current_user.updated_at = datetime.utcnow()
+
     db.commit()
-    db.refresh(new_user)
-    return schemas.UserOut.from_orm(new_user)
+    db.refresh(current_user)
 
-
-@router.post("/login", response_model=schemas.TokenOut)
-def login_user(login_data: schemas.Login, db: Session = Depends(get_db)):
-    """
-    User login route — validates credentials, returns JWT token.
-    Expected body: { "email": "user@example.com", "password": "1234" }
-    """
-    user = db.query(models.User).filter(models.User.email == login_data.email).first()
-
-    if not user or user.password_hash != login_data.password:  # ⚠️ In prod, hash passwords!
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    access_token = create_access_token({"email": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return schemas.UserOut.from_orm(current_user)
 
 
 @router.get("/me", response_model=schemas.UserOut)
 async def get_me(user=Depends(get_current_user)):
-    """Get current logged-in user details"""
+    """Get current logged-in user details."""
     return schemas.UserOut.from_orm(user)
+

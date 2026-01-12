@@ -158,6 +158,20 @@ class ResetPassword(BaseModel):
     email: EmailStr
     new_password: str
 
+# Firebase-based Auth schemas (new)
+class GoogleLoginRequest(BaseModel):
+    """Request body for Google login."""
+    id_token: str  # Firebase ID token from frontend
+    username: Optional[str] = None  # Optional username for new users
+
+class LinkAccountRequest(BaseModel):
+    """Request body for linking additional auth methods."""
+    id_token: str  # Firebase ID token from frontend
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for refreshing backend JWT token."""
+    id_token: str  # Firebase ID token from frontend
+
 # Social Link schemas
 class SocialLinkBase(BaseModel):
     platform_name: str

@@ -11,9 +11,9 @@ def generate_uuid():
 class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
+    firebase_uid = Column(String, unique=True, nullable=False, index=True)
     username = Column(String, unique=True, nullable=False, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=True, index=True)  # Nullable for Google-only users
     fullname = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     dob = Column(Date, nullable=True)
