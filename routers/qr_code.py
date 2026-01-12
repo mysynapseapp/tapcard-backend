@@ -14,7 +14,7 @@ router = APIRouter()
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
     from jose import JWTError, jwt
-    SECRET_KEY = "your-secret-key"
+    SECRET_KEY = "your_jwt_secret_key"
     ALGORITHM = "HS256"
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -23,7 +23,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
+        email: str = payload.get("email")
         if email is None:
             raise credentials_exception
     except JWTError:
@@ -43,26 +43,75 @@ def generate_qr_code(data: str) -> str:
     img_str = base64.b64encode(buffered.getvalue()).decode()
     return f"data:image/png;base64,{img_str}"
 
-@router.get("/", response_model=schemas.QRCodeOut)
-def get_qr_code(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    qr_code = db.query(models.QRCode).filter(models.QRCode.user_id == current_user.id).order_by(models.QRCode.last_generated_at.desc()).first()
-    if qr_code:
-        return qr_code
-    # Generate new QR code if none exists
-    data = f"https://example.com/user/{current_user.id}"
-    qr_code_url = generate_qr_code(data)
-    new_qr = models.QRCode(user_id=current_user.id, qr_code_url=qr_code_url, last_generated_at=datetime.utcnow())
-    db.add(new_qr)
-    db.commit()
-    db.refresh(new_qr)
-    return new_qr
+@router.get("/api/user/qr-code", response_model=schemas.QRCodeOut)
+def get_qr_code(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get or generate QR code for the current user"""
+    try:
+        qr_code = db.query(models.QRCode).filter(
+            models.QRCode.user_id == current_user.id
+        ).first()
 
-@router.post("/regenerate", response_model=schemas.QRCodeOut)
-def regenerate_qr_code(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    data = f"https://example.com/user/{current_user.id}"
-    qr_code_url = generate_qr_code(data)
-    new_qr = models.QRCode(user_id=current_user.id, qr_code_url=qr_code_url, last_generated_at=datetime.utcnow())
-    db.add(new_qr)
-    db.commit()
-    db.refresh(new_qr)
-    return new_qr
+        if not qr_code:
+            # Generate a new QR code if none exists
+            qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://yourapp.com/users/{current_user.username}"
+            qr_code = models.QRCode(
+                user_id=current_user.id,
+                qr_code_url=qr_code_url,
+                last_generated_at=datetime.utcnow()
+            )
+            db.add(qr_code)
+            db.commit()
+            db.refresh(qr_code)
+        
+        # Convert the ORM object to the Pydantic model with proper serialization
+        return schemas.QRCodeOut.from_orm(qr_code)
+    except Exception as e:
+        db.rollback()
+        print(f"Error getting QR code: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get QR code: {str(e)}")
+
+@router.post("/api/user/qr-code/regenerate", response_model=schemas.QRCodeOut)
+def regenerate_qr_code(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Regenerate QR code for the current user"""
+    try:
+        # First, try to find existing QR code
+        qr_code = db.query(models.QRCode).filter(
+            models.QRCode.user_id == current_user.id
+        ).first()
+
+        # Generate new QR code data and URL
+        data = f"https://yourapp.com/users/{current_user.username}"
+        qr_code_url = generate_qr_code(data)
+        
+        if qr_code:
+            # Update existing QR code
+            qr_code.qr_code_url = qr_code_url
+            qr_code.last_generated_at = datetime.utcnow()
+        else:
+            # Create new QR code if none exists
+            qr_code = models.QRCode(
+                user_id=current_user.id,
+                qr_code_url=qr_code_url,
+                last_generated_at=datetime.utcnow()
+            )
+            db.add(qr_code)
+        
+        db.commit()
+        db.refresh(qr_code)
+        
+        # Convert the ORM object to the Pydantic model with proper serialization
+        return schemas.QRCodeOut.from_orm(qr_code)
+    except Exception as e:
+        db.rollback()
+        print(f"Error regenerating QR code: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate QR code: {str(e)}")

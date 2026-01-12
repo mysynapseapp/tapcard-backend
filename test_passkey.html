@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passkey Test</title>
+</head>
+
+<body>
+    <h1>Passkey Authentication Test</h1>
+    <div id="output"></div>
+
+    <script>
+        const BASE_URL = 'http://localhost:8000';
+        const testEmail = 'test@example.com';
+
+        function log(message) {
+            const output = document.getElementById('output');
+            output.innerHTML += '<p>' + message + '</p>';
+            console.log(message);
+        }
+
+        async function registerPasskey() {
+            try {
+                log('🔐 Starting passkey registration...');
+
+                // Get registration challenge
+                const challengeResponse = await fetch(`${BASE_URL}/api/passkey/register/challenge?email=${testEmail}`);
+                if (!challengeResponse.ok) {
+                    throw new Error(`Failed to get challenge: ${challengeResponse.status}`);
+                }
+                const challengeData = await challengeResponse.json();
+                log('✅ Got registration challenge');
+
+                // Create credential
+                const credential = await navigator.credentials.create({
+                    publicKey: challengeData.options
+                });
+                log('✅ Created credential');
+
+                // Prepare verification data
+                const verificationData = {
+                    email: testEmail,
+                    credential: {
+                        id: credential.id,
+                        rawId: arrayBufferToBase64(credential.rawId),
+                        response: {
+                            clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+                            attestationObject: arrayBufferToBase64(credential.response.attestationObject)
+                        },
+                        type: credential.type
+                    },
+                    challenge: challengeData.options.challenge
+                };
+
+                // Verify registration
+                const verifyResponse = await fetch(`${BASE_URL}/api/passkey/register/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(verificationData)
+                });
+
+                if (verifyResponse.ok) {
+                    const result = await verifyResponse.json();
+                    log('✅ Registration successful: ' + JSON.stringify(result));
+                    return true;
+                } else {
+                    log('❌ Registration failed: ' + await verifyResponse.text());
+                    return false;
+                }
+            } catch (error) {
+                log('❌ Registration error: ' + error.message);
+                return false;
+            }
+        }
+
+        async function loginWithPasskey() {
+            try {
+                log('🔑 Starting passkey login...');
+
+                // Get login challenge
+                const challengeResponse = await fetch(`${BASE_URL}/api/passkey/login/challenge?email=${testEmail}`);
+                if (!challengeResponse.ok) {
+                    throw new Error(`Failed to get challenge: ${challengeResponse.status}`);
+                }
+                const challengeData = await challengeResponse.json();
+                log('✅ Got login challenge');
+
+                // Get credential
+                const assertion = await navigator.credentials.get({
+                    publicKey: challengeData.options
+                });
+                log('✅ Got assertion');
+
+                // Prepare verification data
+                const verificationData = {
+                    email: testEmail,
+                    credential: {
+                        id: assertion.id,
+                        rawId: arrayBufferToBase64(assertion.rawId),
+                        response: {
+                            clientDataJSON: arrayBufferToBase64(assertion.response.clientDataJSON),
+                            authenticatorData: arrayBufferToBase64(assertion.response.authenticatorData),
+                            signature: arrayBufferToBase64(assertion.response.signature),
+                            userHandle: assertion.response.userHandle ? arrayBufferToBase64(assertion.response.userHandle) : null
+                        },
+                        type: assertion.type
+                    },
+                    challenge: challengeData.options.challenge
+                };
+
+                // Verify login
+                const verifyResponse = await fetch(`${BASE_URL}/api/passkey/login/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(verificationData)
+                });
+
+                if (verifyResponse.ok) {
+                    const result = await verifyResponse.json();
+                    log('✅ Login successful: ' + JSON.stringify(result));
+                    return true;
+                } else {
+                    log('❌ Login failed: ' + await verifyResponse.text());
+                    return false;
+                }
+            } catch (error) {
+                log('❌ Login error: ' + error.message);
+                return false;
+            }
+        }
+
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        // Run tests
+        async function runTests() {
+            const registered = await registerPasskey();
+            if (registered) {
+                await loginWithPasskey();
+            }
+        }
+
+        // Check if WebAuthn is supported
+        if (window.PublicKeyCredential) {
+            log('✅ WebAuthn is supported');
+            runTests();
+        } else {
+            log('❌ WebAuthn is not supported');
+        }
+    </script>
+</body>
+
+</html>

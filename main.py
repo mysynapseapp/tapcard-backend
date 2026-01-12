@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import httpx
 import asyncio
 
-from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social
+from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social, passkey
 from database import engine, Base
 import models
 
@@ -26,9 +25,10 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(5)  # small delay to let server start fully
         while True:
             try:
-                async with httpx.AsyncClient() as client:
-                    res = await client.get(APP_URL)
-                    print(f"✅ Self-ping: {res.status_code}")
+                # Simple ping without httpx
+                import urllib.request
+                with urllib.request.urlopen(APP_URL) as response:
+                    print(f"✅ Self-ping: {response.status}")
             except Exception as e:
                 print(f"❌ Self-ping failed: {e}")
             await asyncio.sleep(PING_INTERVAL)
@@ -55,12 +55,14 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/user", tags=["profile"])
-app.include_router(social_links.router, prefix="/api/user", tags=["social_links"])
-app.include_router(portfolio.router, prefix="/api/user/portfolio", tags=["portfolio"])
-app.include_router(work_experience.router, prefix="/api/user/work-experience", tags=["work_experience"])
-app.include_router(qr_code.router, prefix="/api/user/qr-code", tags=["qr_code"])
+# Mount routers with full paths in their route definitions
+app.include_router(social_links.router, tags=["social_links"])
+app.include_router(portfolio.router, tags=["portfolio"])
+app.include_router(work_experience.router, tags=["work_experience"])
+app.include_router(qr_code.router, tags=["qr_code"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(social.router, prefix="/api/social", tags=["social"])
+app.include_router(passkey.router, prefix="/api/passkey", tags=["passkey"])
 
 # Root route
 @app.get("/", tags=["root"])
