@@ -3,7 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 
-from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social
+from routers import (
+    auth,
+    profile,
+    social_links,
+    portfolio,
+    work_experience,
+    qr_code,
+    analytics,
+    social,
+)
 from database import engine, Base
 import models
 
@@ -11,7 +20,7 @@ import models
 APP_URL = "https://tapcard-backend.onrender.com"
 PING_INTERVAL = 5 * 60  # 5 minutes
 
-# Lifespan context manager for startup and shutdown logic
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ✅ On Startup
@@ -22,10 +31,9 @@ async def lifespan(app: FastAPI):
 
     # Start self-ping loop in background
     async def self_ping():
-        await asyncio.sleep(5)  # small delay to let server start fully
+        await asyncio.sleep(5)
         while True:
             try:
-                # Simple ping without httpx
                 import urllib.request
                 with urllib.request.urlopen(APP_URL) as response:
                     print(f"✅ Self-ping: {response.status}")
@@ -34,37 +42,43 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(PING_INTERVAL)
 
     asyncio.create_task(self_ping())
-
-    yield  # 👈 App runs here
-
-    # ❌ On Shutdown (if needed)
+    yield
     print("🛑 App is shutting down...")
 
-# Create FastAPI app
-app = FastAPI(title="User Profile API", lifespan=lifespan, redirect_slashes=False)
+
+# ✅ IMPORTANT: DO NOT disable redirect_slashes
+app = FastAPI(
+    title="User Profile API",
+    lifespan=lifespan,
+)
 
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific domains
+    allow_origins=["*"],  # tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
+# ---------------- ROUTERS ---------------- #
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/user", tags=["profile"])
-# Mount routers with full paths in their route definitions
-app.include_router(social_links.router, tags=["social_links"])
-app.include_router(portfolio.router, tags=["portfolio"])
-app.include_router(work_experience.router, tags=["work_experience"])
-app.include_router(qr_code.router, tags=["qr_code"])
-app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
-app.include_router(social.router, prefix="/api/social", tags=["social"])
-# app.include_router(passkey.router, prefix="/api/passkey", tags=["passkey"])
+
+# These routers already define their own prefixes
+app.include_router(social_links.router)
+app.include_router(portfolio.router)
+app.include_router(work_experience.router)
+app.include_router(qr_code.router)
+
+
+app.include_router(analytics.router)
+app.include_router(social.router)
 
 # Root route
 @app.get("/", tags=["root"])
 async def root():
-    return {"message": "Welcome to the User Profile API. Visit /docs for API documentation."}
+    return {
+        "message": "Welcome to the User Profile API. Visit /docs for API documentation."
+    }
