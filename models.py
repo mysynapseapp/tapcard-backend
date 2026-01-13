@@ -1,12 +1,18 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
+import enum
 
 def generate_uuid():
     return uuid.uuid4()
+
+class CircleStatus(enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
 
 class User(Base):
     __tablename__ = "users"
@@ -27,19 +33,25 @@ class User(Base):
     analytics = relationship("Analytics", back_populates="user", cascade="all, delete-orphan")
     passkey_credentials = relationship("PasskeyCredential", back_populates="user", cascade="all, delete-orphan")
     
-    # Follow relationships
-    following = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower", cascade="all, delete-orphan")
-    followers = relationship("Follow", foreign_keys="Follow.following_id", back_populates="following", cascade="all, delete-orphan")
+    # Circle relationships (LinkedIn-style mutual connections)
+    # sent_invites: circles where I am the requester
+    sent_invites = relationship("Circle", foreign_keys="Circle.requester_id", back_populates="requester", cascade="all, delete-orphan")
+    # received_invites: circles where I am the receiver
+    received_invites = relationship("Circle", foreign_keys="Circle.receiver_id", back_populates="receiver", cascade="all, delete-orphan")
 
-class Follow(Base):
-    __tablename__ = "follows"
+class Circle(Base):
+    __tablename__ = "circles"
     id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid, unique=True, index=True)
-    follower_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    following_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    requester_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    receiver_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    status = Column(
+        Enum("pending", "accepted", "rejected", name="circle_status"),
+        default="pending",
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    follower = relationship("User", foreign_keys=[follower_id], back_populates="following")
-    following = relationship("User", foreign_keys=[following_id], back_populates="followers")
+    requester = relationship("User", foreign_keys=[requester_id], back_populates="sent_invites")
+    receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_invites")
 
 class SocialLink(Base):
     __tablename__ = "social_links"

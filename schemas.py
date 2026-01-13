@@ -2,6 +2,14 @@ from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, HttpUrl, ConfigDict
 from uuid import UUID
+import enum
+
+# ---------------- CIRCLE ENUMS ---------------- #
+
+class CircleStatusEnum(str, enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
 
 # User schemas
 class UserBase(BaseModel):
@@ -308,5 +316,65 @@ class UserSearchResponse(BaseModel):
 
 class FollowResponse(BaseModel):
     message: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+# ---------------- CIRCLE SCHEMAS (LinkedIn-style) ---------------- #
+
+class UserCircleSearchResponse(BaseModel):
+    """Search result with connection status for Circle model"""
+    id: str
+    username: str
+    fullname: str
+    bio: Optional[str] = None
+    connection_status: str  # "connected" | "pending" | "none"
+    is_invited_by_me: bool  # true if I sent the pending invite
+    connections_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CircleOut(BaseModel):
+    """Circle connection response"""
+    id: str
+    requester_id: str
+    receiver_id: str
+    status: CircleStatusEnum
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_orm(cls, obj):
+        data = {
+            'id': str(obj.id),
+            'requester_id': str(obj.requester_id),
+            'receiver_id': str(obj.receiver_id),
+            'status': obj.status,
+            'created_at': obj.created_at
+        }
+        return cls(**data)
+
+
+class CircleInviteResponse(BaseModel):
+    """Response for invite/accept/reject/remove operations"""
+    message: str
+    circle: Optional[CircleOut] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PendingInvitesResponse(BaseModel):
+    """Response for pending invites list"""
+    received_invites: List[UserCircleSearchResponse]  # invites I received
+    sent_invites: List[UserCircleSearchResponse]  # invites I sent
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConnectionsResponse(BaseModel):
+    """Response for user's connections list"""
+    connections: List[UserCircleSearchResponse]
+    total_count: int
 
     model_config = ConfigDict(from_attributes=True)
