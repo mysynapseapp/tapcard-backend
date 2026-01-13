@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 
-from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social, passkey
+from routers import auth, profile, social_links, portfolio, work_experience, qr_code, analytics, social
 from database import engine, Base
 import models
 
@@ -62,7 +62,7 @@ app.include_router(work_experience.router, tags=["work_experience"])
 app.include_router(qr_code.router, tags=["qr_code"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(social.router, prefix="/api/social", tags=["social"])
-app.include_router(passkey.router, prefix="/api/passkey", tags=["passkey"])
+# app.include_router(passkey.router, prefix="/api/passkey", tags=["passkey"])
 
 # Root route
 @app.get("/", tags=["root"])
