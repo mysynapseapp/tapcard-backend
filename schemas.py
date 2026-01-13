@@ -185,7 +185,7 @@ class SocialLinkUpdate(BaseModel):
     link_url: Optional[HttpUrl] = None
 
 class SocialLinkOut(SocialLinkBase):
-    id: str
+    id: UUID
 
     model_config = ConfigDict(from_attributes=True)
 
