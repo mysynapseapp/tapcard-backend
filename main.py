@@ -12,6 +12,7 @@ from routers import (
     qr_code,
     analytics,
     social,
+    dashboard,  # 🔹 Add dashboard router
 )
 from database import engine, Base
 import models
@@ -65,6 +66,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/user", tags=["profile"])
+app.include_router(dashboard.router, prefix="/api/user", tags=["dashboard"])  # 🔹 Dashboard endpoint
 
 # These routers already define their own prefixes
 app.include_router(social_links.router)

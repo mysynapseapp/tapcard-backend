@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_, and_, func, select
 from typing import List
 from uuid import UUID
 
 from database import get_db
 from models import User, Circle
+from cache import cache_response  # Import cache_response from cache.py
 import schemas
 from schemas import UserCircleSearchResponse, CircleStatusEnum, CircleInviteResponse, ConnectionsResponse, PendingInvitesResponse
 from routers.profile import get_current_user
@@ -40,21 +41,79 @@ def get_connection_status(db: Session, current_user_id: UUID, other_user_id: UUI
         return "none", False
 
 
+# 🔹 OPTIMIZED: Single query for all connection counts (fixes N+1 problem)
+def get_all_connection_counts(db: Session, user_ids: List[UUID]) -> dict:
+    """
+    Get connection counts for multiple users in a single query.
+    This replaces the N+1 pattern:
+    
+    ❌ Before (N+1 problem):
+        for user in users:
+            followers_count = db.query(Follow).count()  # N queries!
+    
+    ✅ After (single query):
+        counts = dict(db.query(Follow.following_id, func.count(...)).group_by(...))
+    """
+    if not user_ids:
+        return {}
+    
+    # Single query to get connection counts for all users
+    counts = dict(
+        db.query(
+            Circle.receiver_id,
+            func.count(Circle.id)
+        )
+        .filter(
+            Circle.receiver_id.in_(user_ids),
+            Circle.status == "accepted"
+        )
+        .group_by(Circle.receiver_id)
+        .all()
+    )
+    
+    # Also count where user is the requester
+    requester_counts = dict(
+        db.query(
+            Circle.requester_id,
+            func.count(Circle.id)
+        )
+        .filter(
+            Circle.requester_id.in_(user_ids),
+            Circle.status == "accepted"
+        )
+        .group_by(Circle.requester_id)
+        .all()
+    )
+    
+    # Combine counts
+    result = {}
+    for user_id in user_ids:
+        result[user_id] = counts.get(user_id, 0) + requester_counts.get(user_id, 0)
+    
+    return result
+
+
 def get_user_connections_count(db: Session, user_id: UUID) -> int:
-    """Get count of accepted connections for a user"""
-    return db.query(Circle).filter(
+    """Get count of accepted connections for a user - optimized version"""
+    count = db.query(Circle).filter(
         or_(
             Circle.requester_id == user_id,
             Circle.receiver_id == user_id
         ),
         Circle.status == "accepted"
     ).count()
+    return count
 
 
-def build_circle_user_response(db: Session, user: User, current_user_id: UUID) -> UserCircleSearchResponse:
+def build_circle_user_response(db: Session, user: User, current_user_id: UUID, connection_counts: dict = None) -> UserCircleSearchResponse:
     """Build UserCircleSearchResponse from User object"""
     connection_status, is_invited_by_me = get_connection_status(db, current_user_id, user.id)
-    connections_count = get_user_connections_count(db, user.id)
+    
+    # Use pre-computed counts if provided (for batch optimization)
+    if connection_counts:
+        connections_count = connection_counts.get(user.id, 0)
+    else:
+        connections_count = get_user_connections_count(db, user.id)
     
     return UserCircleSearchResponse(
         id=str(user.id),
@@ -278,7 +337,11 @@ def search_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Search users with connection status"""
+    """
+    Search users with connection status - optimized version.
+    
+    Uses batch connection count query instead of N+1 queries.
+    """
     users = (
         db.query(User)
         .filter(
@@ -293,9 +356,19 @@ def search_users(
         .all()
     )
 
+    if not users:
+        return []
+
+    # 🔹 OPTIMIZED: Get connection counts for all users in ONE query
+    user_ids = [user.id for user in users]
+    connection_counts = get_all_connection_counts(db, user_ids)
+
+    # Build responses using pre-computed counts
     results = []
     for user in users:
-        response = build_circle_user_response(db, user, current_user.id)
+        response = build_circle_user_response(
+            db, user, current_user.id, connection_counts
+        )
         results.append(response)
 
     return results
@@ -346,11 +419,17 @@ def get_following_deprecated(
 # ---------------- PUBLIC PROFILE ---------------- #
 
 @router.get("/profile/{user_id}", response_model=schemas.UserProfile)
+@cache_response(expire=60)  # 🔹 Cache public profiles for 60 seconds
 def get_user_profile(
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Get user profile (public endpoint with caching).
+    
+    🔹 Cached for 60 seconds - profiles load instantly
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

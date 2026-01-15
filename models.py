@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer, Enum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer, Enum, Index, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -26,6 +26,13 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # 🔹 Database indexes for performance (see N+1 fix guide)
+    __table_args__ = (
+        # Composite index for common query patterns
+        Index("idx_user_username_email", "username", "email"),
+        Index("idx_user_fullname", "fullname"),
+    )
+
     social_links = relationship("SocialLink", back_populates="user", cascade="all, delete-orphan")
     portfolio_items = relationship("PortfolioItem", back_populates="user", cascade="all, delete-orphan")
     work_experiences = relationship("WorkExperience", back_populates="user", cascade="all, delete-orphan")
@@ -49,6 +56,15 @@ class Circle(Base):
         default="pending",
     )
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 🔹 Database indexes for Circle queries (see N+1 fix guide)
+    __table_args__ = (
+        # Composite index for connection lookup queries
+        Index("idx_circle_requester_status", "requester_id", "status"),
+        Index("idx_circle_receiver_status", "receiver_id", "status"),
+        # Composite index for checking mutual connections
+        Index("idx_circle_connection", "requester_id", "receiver_id", "status"),
+    )
 
     requester = relationship("User", foreign_keys=[requester_id], back_populates="sent_invites")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_invites")

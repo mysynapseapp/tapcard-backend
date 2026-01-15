@@ -8,6 +8,7 @@ import uuid
 import models, schemas
 from database import get_db
 from firebase_auth import verify_firebase_token
+from cache import cache_response  # 🔹 Import cache decorator
 
 router = APIRouter()
 security = HTTPBearer()
@@ -158,12 +159,16 @@ def update_profile(
 
 
 @router.get("/profile/{user_id}", response_model=schemas.UserProfile)
+@cache_response(expire=60)  # 🔹 Cache public profiles for 60 seconds
 def get_user_profile_by_id(
     user_id: str,
     db: Session = Depends(get_db),
 ):
     """
     Public endpoint: get user profile by ID
+    
+    🔹 Cached for 60 seconds - public profiles load instantly
+    Backend still refreshes silently after cache expires
     """
     try:
         user_uuid = UUID(user_id)
