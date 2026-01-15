@@ -149,6 +149,33 @@ def get_user_by_uid(firebase_uid: str) -> auth.UserRecord:
             detail=f"Failed to get Firebase user: {str(e)}",
         )
 
+def delete_user(firebase_uid: str) -> dict:
+    """
+    Delete a Firebase user by their UID.
+    
+    Args:
+        firebase_uid: The Firebase user UID
+        
+    Returns:
+        dict: Success message
+        
+    Raises:
+        HTTPException: If user not found or error occurs
+    """
+    try:
+        auth.delete_user(firebase_uid)
+        return {"message": f"User {firebase_uid} deleted successfully from Firebase"}
+    except auth.UserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Firebase user not found",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete Firebase user: {str(e)}",
+        )
+
 # Initialize on module import
 initialize_firebase()
 

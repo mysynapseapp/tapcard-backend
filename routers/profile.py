@@ -151,6 +151,8 @@ def update_profile(
     for key, value in update_data.items():
         setattr(user, key, value)
 
+    # Mark profile as complete when user updates their profile
+    user.is_profile_complete = True
     user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)

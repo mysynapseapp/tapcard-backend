@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer, Enum, Index, func
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Date, Integer, Enum, Index, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -23,6 +23,7 @@ class User(Base):
     fullname = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     dob = Column(Date, nullable=True)
+    is_profile_complete = Column(Boolean, default=False)  # Track if user has completed their profile
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
