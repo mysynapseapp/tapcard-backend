@@ -39,6 +39,7 @@ class UserOut(BaseModel):
     fullname: str
     bio: Optional[str] = None
     dob: Optional[date] = None
+    is_profile_complete: bool = False
     social_links: List['SocialLinkOut'] = []
     followers_count: int = 0
     following_count: int = 0
@@ -66,6 +67,9 @@ class UserOut(BaseModel):
         created_at = obj.created_at if hasattr(obj, 'created_at') and obj.created_at else datetime.utcnow()
         updated_at = obj.updated_at if hasattr(obj, 'updated_at') and obj.updated_at else datetime.utcnow()
         
+        # Get is_profile_complete flag (default False if not set)
+        is_profile_complete = getattr(obj, 'is_profile_complete', False)
+        
         data = {
             'id': str(obj.id),
             'username': obj.username,
@@ -73,6 +77,7 @@ class UserOut(BaseModel):
             'fullname': obj.fullname,
             'bio': obj.bio,
             'dob': obj.dob,
+            'is_profile_complete': is_profile_complete,
             'social_links': social_links_data,
             'followers_count': followers_count,
             'following_count': following_count,
@@ -171,6 +176,14 @@ class GoogleLoginRequest(BaseModel):
     """Request body for Google login."""
     id_token: str  # Firebase ID token from frontend
     username: Optional[str] = None  # Optional username for new users
+
+class GoogleLoginResponse(BaseModel):
+    """Response for fast Google login - minimal response for better UX."""
+    access_token: str  # JWT token for backend authentication
+    is_new_user: bool  # True if user was just created
+    user_id: str  # User's UUID
+    is_profile_complete: bool  # True if user has completed their profile
+    message: str = "Login successful"
 
 class LinkAccountRequest(BaseModel):
     """Request body for linking additional auth methods."""
